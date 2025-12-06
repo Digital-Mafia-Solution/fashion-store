@@ -1,4 +1,4 @@
-import { Link } from "react-router-dom";
+import Link from "next/link";
 
 export default function Footer() {
   return (
@@ -8,13 +8,13 @@ export default function Footer() {
           © {new Date().getFullYear()} Boilerplate. All rights reserved.
         </div>
         <div className="flex flex-wrap gap-3 items-center justify-center">
-          <Link to="/policy/privacy" className="hover:underline">
+          <Link href="/policy/privacy" className="hover:underline">
             Privacy
           </Link>
-          <Link to="/policy/terms" className="hover:underline">
+          <Link href="/policy/terms" className="hover:underline">
             Terms
           </Link>
-          <Link to="/policy/cookies" className="hover:underline">
+          <Link href="/policy/cookies" className="hover:underline">
             Cookies
           </Link>
         </div>
