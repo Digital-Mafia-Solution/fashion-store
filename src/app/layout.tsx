@@ -25,9 +25,13 @@ export default function RootLayout({
           >
             <div className="flex flex-col min-h-screen">
               <Navigation />
-              <main className="flex-1 container mx-auto px-4 py-8">
+              
+              {/* FIX: Removed 'container mx-auto px-4 py-8' */}
+              {/* The layout now just provides the flex space. The Page handles the width. */}
+              <main className="flex-1 w-full">
                 {children}
               </main>
+              
               <Footer />
             </div>
         </ThemeProvider>

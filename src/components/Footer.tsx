@@ -2,20 +2,23 @@ import Link from "next/link";
 
 export default function Footer() {
   return (
-    <footer className="w-full border-t mt-12 py-6 bg-white/80 dark:bg-gray-900/80">
-      <div className="container mx-auto px-6 flex flex-col sm:flex-row items-center justify-between gap-2 text-sm text-gray-600 dark:text-gray-300">
+    // FIX: Use semantic colors (bg-background) and border-border
+    <footer className="w-full border-t bg-background/95 backdrop-blur supports-backdrop-filter:bg-background/60 py-8 mt-auto">
+      {/* FIX: Use px-4 to align with Header and Main Content */}
+      <div className="container mx-auto px-4 flex flex-col md:flex-row items-center justify-between gap-4 text-sm text-muted-foreground">
         <div>
-          © {new Date().getFullYear()} Boilerplate. All rights reserved.
+          © {new Date().getFullYear()} Digital Mafia Fashion. All rights reserved.
         </div>
-        <div className="flex flex-wrap gap-3 items-center justify-center">
-          <Link href="/policy/privacy" className="hover:underline">
-            Privacy
+        
+        <div className="flex flex-wrap gap-6 items-center justify-center">
+          <Link href="/policy/privacy" className="hover:text-foreground transition-colors hover:underline underline-offset-4">
+            Privacy Policy
           </Link>
-          <Link href="/policy/terms" className="hover:underline">
-            Terms
+          <Link href="/policy/terms" className="hover:text-foreground transition-colors hover:underline underline-offset-4">
+            Terms of Service
           </Link>
-          <Link href="/policy/cookies" className="hover:underline">
-            Cookies
+          <Link href="/policy/cookies" className="hover:text-foreground transition-colors hover:underline underline-offset-4">
+            Cookie Policy
           </Link>
         </div>
       </div>
