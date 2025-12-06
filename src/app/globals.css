@@ -1,26 +1,208 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+@plugin 'tailwindcss-animate';
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* TailwindV4 theme and design tokens */
+@theme {
+  /* Fonts */
+  --font-sans: ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji",
+    "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+  --font-serif: ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+    "Liberation Mono", "Courier New", monospace;
+
+  /* Digital Mafia Solutions - Enhanced Color Theme */
+
+  /* Dark Theme Colors (Default) */
+  /* HSL fallback colors */
+  --color-background: hsl(123 38% 4%); /* --bg */
+  --color-foreground: hsl(122 69% 93%); /* --text */
+
+  --color-card: hsl(123 21% 8%); /* --bg-light */
+  --color-card-foreground: hsl(122 69% 93%); /* --text */
+
+  --color-popover: hsl(123 21% 8%); /* --bg-light */
+  --color-popover-foreground: hsl(122 69% 93%); /* --text */
+
+  --color-primary: hsl(124 33% 65%); /* --primary */
+  --color-primary-foreground: hsl(124 61% 1%); /* --bg-dark */
+
+  --color-secondary: hsl(299 39% 72%); /* --secondary */
+  --color-secondary-foreground: hsl(122 69% 93%); /* --text */
+
+  --color-muted: hsl(123 21% 8%); /* --bg-light */
+  --color-muted-foreground: hsl(122 14% 68%); /* --text-muted */
+
+  --color-accent: hsl(299 39% 72%); /* --secondary */
+  --color-accent-foreground: hsl(124 61% 1%); /* --bg-dark */
+
+  --color-destructive: hsl(9 26% 64%); /* --danger */
+  --color-destructive-foreground: hsl(122 69% 93%); /* --text */
+
+  --color-border: hsl(123 15% 27%); /* --border */
+  --color-input: hsl(123 21% 8%); /* --bg-light */
+  --color-ring: hsl(124 33% 65%); /* --primary */
+
+  --color-sidebar-background: hsl(123 21% 8%); /* --bg-light */
+  --color-sidebar-foreground: hsl(122 69% 93%); /* --text */
+  --color-sidebar-accent: hsl(122 11% 37%); /* --highlight */
+  --color-sidebar-accent-foreground: hsl(122 69% 93%); /* --text */
+  --color-sidebar-border: hsl(124 23% 16%); /* --border-muted */
+  --color-sidebar-ring: hsl(124 33% 65%); /* --primary */
+
+  /* OKLCH modern color values for better color consistency */
+  --color-background: oklch(0.15 0.02 146);
+  --color-foreground: oklch(0.96 0.04 146);
+
+  --color-card: oklch(0.2 0.02 146);
+  --color-card-foreground: oklch(0.96 0.04 146);
+
+  --color-popover: oklch(0.2 0.02 146);
+  --color-popover-foreground: oklch(0.96 0.04 146);
+
+  --color-primary: oklch(0.76 0.1 146);
+  --color-primary-foreground: oklch(0.1 0.02 146);
+
+  --color-secondary: oklch(0.76 0.1 326);
+  --color-secondary-foreground: oklch(0.96 0.04 146);
+
+  --color-muted: oklch(0.2 0.02 146);
+  --color-muted-foreground: oklch(0.76 0.04 146);
+
+  --color-accent: oklch(0.76 0.1 326);
+  --color-accent-foreground: oklch(0.1 0.02 146);
+
+  --color-destructive: oklch(0.7 0.05 30);
+  --color-destructive-foreground: oklch(0.96 0.04 146);
+
+  --color-border: oklch(0.4 0.04 146);
+  --color-input: oklch(0.2 0.02 146);
+  --color-ring: oklch(0.76 0.1 146);
+
+  --color-sidebar-background: oklch(0.2 0.02 146);
+  --color-sidebar-foreground: oklch(0.96 0.04 146);
+  --color-sidebar-accent: oklch(0.5 0.04 146);
+  --color-sidebar-accent-foreground: oklch(0.96 0.04 146);
+  --color-sidebar-border: oklch(0.3 0.04 146);
+  --color-sidebar-ring: oklch(0.76 0.1 146);
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+/* Light Theme Override */
+.light {
+  /* HSL fallback colors */
+  --color-background: hsl(121 39% 94%); /* --bg */
+  --color-foreground: hsl(125 84% 3%); /* --text */
+
+  --color-card: hsl(121 100% 99%); /* --bg-light */
+  --color-card-foreground: hsl(125 84% 3%); /* --text */
+
+  --color-popover: hsl(121 100% 99%); /* --bg-light */
+  --color-popover-foreground: hsl(125 84% 3%); /* --text */
+
+  --color-primary: hsl(129 52% 22%); /* --primary */
+  --color-primary-foreground: hsl(121 100% 99%); /* --bg-light */
+
+  --color-secondary: hsl(298 33% 29%); /* --secondary */
+  --color-secondary-foreground: hsl(125 84% 3%); /* --text */
+
+  --color-muted: hsl(121 21% 89%); /* --bg-dark */
+  --color-muted-foreground: hsl(123 15% 27%); /* --text-muted */
+
+  --color-accent: hsl(298 33% 29%); /* --secondary */
+  --color-accent-foreground: hsl(121 100% 99%); /* --bg-light */
+
+  --color-destructive: hsl(9 21% 41%); /* --danger */
+  --color-destructive-foreground: hsl(121 100% 99%); /* --bg-light */
+
+  --color-border: hsl(122 9% 49%); /* --border */
+  --color-input: hsl(121 21% 89%); /* --bg-dark */
+  --color-ring: hsl(129 52% 22%); /* --primary */
+
+  --color-sidebar-background: hsl(121 100% 99%); /* --bg-light */
+  --color-sidebar-foreground: hsl(125 84% 3%); /* --text */
+  --color-sidebar-accent: hsl(122 100% 98%); /* --highlight */
+  --color-sidebar-accent-foreground: hsl(125 84% 3%); /* --text */
+  --color-sidebar-border: hsl(122 11% 61%); /* --border-muted */
+  --color-sidebar-ring: hsl(129 52% 22%); /* --primary */
+
+  /* OKLCH modern color values for better color consistency */
+  --color-background: oklch(0.96 0.02 146);
+  --color-foreground: oklch(0.15 0.04 146);
+
+  --color-card: oklch(1 0.02 146);
+  --color-card-foreground: oklch(0.15 0.04 146);
+
+  --color-popover: oklch(1 0.02 146);
+  --color-popover-foreground: oklch(0.15 0.04 146);
+
+  --color-primary: oklch(0.4 0.1 146);
+  --color-primary-foreground: oklch(1 0.02 146);
+
+  --color-secondary: oklch(0.4 0.1 326);
+  --color-secondary-foreground: oklch(0.15 0.04 146);
+
+  --color-muted: oklch(0.92 0.02 146);
+  --color-muted-foreground: oklch(0.4 0.04 146);
+
+  --color-accent: oklch(0.4 0.1 326);
+  --color-accent-foreground: oklch(1 0.02 146);
+
+  --color-destructive: oklch(0.5 0.05 30);
+  --color-destructive-foreground: oklch(1 0.02 146);
+
+  --color-border: oklch(0.6 0.04 146);
+  --color-input: oklch(0.92 0.02 146);
+  --color-ring: oklch(0.4 0.1 146);
+
+  --color-sidebar-background: oklch(1 0.02 146);
+  --color-sidebar-foreground: oklch(0.15 0.04 146);
+  --color-sidebar-accent: oklch(1 0.04 146);
+  --color-sidebar-accent-foreground: oklch(0.15 0.04 146);
+  --color-sidebar-border: oklch(0.7 0.04 146);
+  --color-sidebar-ring: oklch(0.4 0.1 146);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+@utility container {
+  margin-inline: auto;
+  padding-inline: 2rem;
+  @media (width >= --theme(--breakpoint-sm)) {
+    max-width: none;
+  }
+  @media (width >= 1400px) {
+    max-width: 1400px;
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+/* Add a hover lift effect for cards */
+.hover-lift {
+  transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.3s ease;
+}
+.hover-lift:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.5);
+}
+
+/* Smooth scrolling for better UX */
+html {
+  scroll-behavior: smooth;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: hsl(var(--color-background));
+}
+
+::-webkit-scrollbar-thumb {
+  background: hsl(var(--color-primary));
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--color-primary) / 0.8);
 }
