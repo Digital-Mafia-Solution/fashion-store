@@ -203,26 +203,41 @@ export type Database = {
       profiles: {
         Row: {
           assigned_location_id: string | null
+          avatar_url: string | null
+          billing_address: Json | null
           created_at: string | null
           email: string | null
+          first_name: string | null
           full_name: string | null
           id: string
+          last_name: string | null
+          phone: string | null
           role: Database["public"]["Enums"]["user_role"] | null
         }
         Insert: {
           assigned_location_id?: string | null
+          avatar_url?: string | null
+          billing_address?: Json | null
           created_at?: string | null
           email?: string | null
+          first_name?: string | null
           full_name?: string | null
           id: string
+          last_name?: string | null
+          phone?: string | null
           role?: Database["public"]["Enums"]["user_role"] | null
         }
         Update: {
           assigned_location_id?: string | null
+          avatar_url?: string | null
+          billing_address?: Json | null
           created_at?: string | null
           email?: string | null
+          first_name?: string | null
           full_name?: string | null
           id?: string
+          last_name?: string | null
+          phone?: string | null
           role?: Database["public"]["Enums"]["user_role"] | null
         }
         Relationships: []

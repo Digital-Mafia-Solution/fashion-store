@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { ArrowLeft, MapPin, Truck } from "lucide-react";
+import AddToCartButton from "@/components/AddToCartButton";
 
 export const revalidate = 0;
 
@@ -133,9 +134,8 @@ export default async function ProductPage({ params }: ProductPageProps) {
           </div>
 
           <div className="mt-10 flex gap-4">
-            <Button size="lg" className="w-full text-lg h-14" disabled={totalStock === 0}>
-              Add to Order
-            </Button>
+            <AddToCartButton product={product} disabled={totalStock === 0} />
+
             <Button size="lg" variant="outline" className="h-14 w-14 p-0 shrink-0">
               <Truck className="w-6 h-6" />
             </Button>

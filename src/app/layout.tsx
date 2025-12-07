@@ -3,6 +3,8 @@ import "./globals.css";
 import { ThemeProvider } from "@/components/theme-provider";
 import Navigation from "@/components/Navigation";
 import Footer from "@/components/Footer";
+import { CartProvider } from "@/context/CartContext";
+import { Toaster } from "@/components/ui/sonner";
 
 export const metadata: Metadata = {
   title: "Fashion Store",
@@ -23,17 +25,16 @@ export default function RootLayout({
             enableSystem
             disableTransitionOnChange
           >
-            <div className="flex flex-col min-h-screen">
-              <Navigation />
-              
-              {/* FIX: Removed 'container mx-auto px-4 py-8' */}
-              {/* The layout now just provides the flex space. The Page handles the width. */}
-              <main className="flex-1 w-full">
-                {children}
-              </main>
-              
-              <Footer />
-            </div>
+            <CartProvider>
+              <div className="flex flex-col min-h-screen">
+                <Navigation />
+                <main className="flex-1 w-full">
+                  {children}
+                </main>
+                <Footer />
+              </div>
+              <Toaster />
+            </CartProvider>
         </ThemeProvider>
       </body>
     </html>

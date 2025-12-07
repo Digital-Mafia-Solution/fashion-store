@@ -7,13 +7,11 @@ export default function CookieConsent() {
   const [show, setShow] = useState(false);
 
   useEffect(() => {
-    // FIX: Wrap in setTimeout to avoid "set-state-in-effect" warning.
-    // This moves the update to the next event loop tick, preventing a synchronous re-render loop.
+    // Delay check to avoid hydration mismatch
     const timer = setTimeout(() => {
       const consent = localStorage.getItem("cookie_consent");
       if (!consent) setShow(true);
-    }, 0);
-
+    }, 500);
     return () => clearTimeout(timer);
   }, []);
 

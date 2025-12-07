@@ -17,18 +17,42 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { useCart } from "@/context/CartContext";
+
 
 export default function Navigation() {
+  const { cartCount } = useCart();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [user, setUser] = useState<SupabaseUser | null>(null);
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
 
   useEffect(() => {
+    // FIX: Define the function INSIDE the effect, before it is called.
+    const fetchProfile = async (userId: string) => {
+      const { data } = await supabase
+        .from("profiles")
+        .select("avatar_url")
+        .eq("id", userId)
+        .single();
+      
+      if (data) setAvatarUrl(data.avatar_url);
+    };
+
+    // 1. Get Auth User
     supabase.auth.getSession().then(({ data: { session } }) => {
       setUser(session?.user ?? null);
+      if (session?.user) fetchProfile(session.user.id);
     });
 
+    // 2. Listen for Auth Changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setUser(session?.user ?? null);
+      if (session?.user) {
+        fetchProfile(session.user.id);
+      } else {
+        setAvatarUrl(null);
+      }
     });
 
     return () => subscription.unsubscribe();
@@ -37,10 +61,10 @@ export default function Navigation() {
   const handleLogout = async () => {
     await supabase.auth.signOut();
     toast.success("Logged out successfully");
+    setAvatarUrl(null);
   };
 
   return (
-    // FIX: Added text-foreground to header
     <header className="sticky top-0 z-50 w-full border-b border-border bg-background/95 backdrop-blur text-foreground supports-backdrop-filter:bg-background/60">
       <div className="container mx-auto px-4 h-16 flex items-center justify-between gap-4">
         {/* Brand */}
@@ -48,7 +72,6 @@ export default function Navigation() {
           <div className="w-8 h-8 rounded-md bg-primary flex items-center justify-center text-primary-foreground shadow-sm group-hover:bg-primary/90 transition-colors">
             DM
           </div>
-          {/* FIX: Explicit text color */}
           <span className="hidden sm:inline-block tracking-tight text-foreground group-hover:text-primary transition-colors">
             Fashion Market
           </span>
@@ -59,7 +82,6 @@ export default function Navigation() {
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
             placeholder="Search for local drops..."
-            // FIX: Added border-input and proper background colors
             className="pl-10 w-full bg-muted/50 border-input text-foreground placeholder:text-muted-foreground focus-visible:bg-background focus-visible:ring-primary/20 transition-all"
           />
         </div>
@@ -72,6 +94,12 @@ export default function Navigation() {
             <Link href="/cart">
               <ShoppingBag className="h-5 w-5" />
               <span className="sr-only">Cart</span>
+              {/* Add Badge */}
+              {cartCount > 0 && (
+                <span className="absolute -top-1 -right-1 h-4 w-4 rounded-full bg-primary text-[10px] flex items-center justify-center text-primary-foreground font-bold">
+                  {cartCount}
+                </span>
+              )}
             </Link>
           </Button>
 
@@ -80,17 +108,29 @@ export default function Navigation() {
             {user ? (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="icon" className="rounded-full text-foreground hover:text-primary">
-                    <User className="h-5 w-5" />
+                  <Button variant="ghost" size="icon" className="rounded-full h-8 w-8">
+                    <Avatar className="h-8 w-8 cursor-pointer border border-border">
+                      <AvatarImage src={avatarUrl || ""} alt="User" />
+                      <AvatarFallback className="bg-primary/10 text-primary">
+                        <User className="h-4 w-4" />
+                      </AvatarFallback>
+                    </Avatar>
                   </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="bg-popover text-popover-foreground border-border">
+                <DropdownMenuContent align="end" className="bg-popover text-popover-foreground border-border w-56">
                   <DropdownMenuLabel>My Account</DropdownMenuLabel>
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem>Orders</DropdownMenuItem>
-                  <DropdownMenuItem>Profile</DropdownMenuItem>
+                  
+                  <DropdownMenuItem asChild className="cursor-pointer">
+                    <Link href="/orders">My Orders</Link>
+                  </DropdownMenuItem>
+                  
+                  <DropdownMenuItem asChild className="cursor-pointer">
+                    <Link href="/profile">Profile Settings</Link>
+                  </DropdownMenuItem>
+                  
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={handleLogout} className="text-destructive focus:text-destructive">
+                  <DropdownMenuItem onClick={handleLogout} className="text-destructive focus:text-destructive cursor-pointer">
                     <LogOut className="mr-2 h-4 w-4" /> Log out
                   </DropdownMenuItem>
                 </DropdownMenuContent>
@@ -137,13 +177,31 @@ export default function Navigation() {
                Contact Support
              </Link>
              <div className="border-t border-border my-2 pt-2">
-                <Link 
-                  href="/login" 
-                  className="flex items-center gap-2 text-sm font-medium px-4 py-3 rounded-md hover:bg-muted transition-colors text-primary"
-                  onClick={() => setIsMenuOpen(false)}
-                >
-                  <User className="w-4 h-4" /> Sign In / Register
-                </Link>
+                {user ? (
+                  <>
+                    <Link 
+                      href="/profile" 
+                      className="flex items-center gap-2 text-sm font-medium px-4 py-3 rounded-md hover:bg-muted transition-colors"
+                      onClick={() => setIsMenuOpen(false)}
+                    >
+                      <User className="w-4 h-4" /> My Profile
+                    </Link>
+                    <button 
+                      onClick={handleLogout}
+                      className="w-full flex items-center gap-2 text-sm font-medium px-4 py-3 rounded-md hover:bg-muted transition-colors text-destructive"
+                    >
+                      <LogOut className="w-4 h-4" /> Log Out
+                    </button>
+                  </>
+                ) : (
+                  <Link 
+                    href="/login" 
+                    className="flex items-center gap-2 text-sm font-medium px-4 py-3 rounded-md hover:bg-muted transition-colors text-primary"
+                    onClick={() => setIsMenuOpen(false)}
+                  >
+                    <User className="w-4 h-4" /> Sign In / Register
+                  </Link>
+                )}
              </div>
            </nav>
          </div>
