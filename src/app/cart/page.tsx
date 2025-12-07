@@ -15,6 +15,7 @@ import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
+import { MockPaymentDialog } from "@/components/MockPaymentDialog"; // <--- Import Component
 
 // FIX: Allow nullable address
 interface Warehouse {
@@ -30,6 +31,7 @@ export default function CartPage() {
   const [selectedLocation, setSelectedLocation] = useState("");
   const [address, setAddress] = useState("");
   const [loading, setLoading] = useState(false);
+  const [showPayment, setShowPayment] = useState(false); // <--- New State
   const router = useRouter();
 
   // Load Warehouses for Pickup Option
@@ -40,40 +42,53 @@ export default function CartPage() {
       .eq("type", "warehouse")
       .eq("is_active", true)
       .then(({ data }) => {
-        // Now compatible with the Warehouse interface
         if (data) setWarehouses(data);
       });
   }, []);
 
-  const handleCheckout = async () => {
-    setLoading(true);
+  // Calculate Final Total (Cart + Delivery)
+  const deliveryFee = fulfillment === 'courier' ? 100 : 0;
+  const finalTotal = cartTotal + deliveryFee;
+
+  // Step 1: Validate inputs before opening Payment Gateway
+  const handleInitiateCheckout = async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      toast.error("Please login to checkout");
+      router.push("/login");
+      return;
+    }
+
+    if (fulfillment === "pickup" && !selectedLocation) {
+      toast.error("Please select a pickup location");
+      return;
+    }
+
+    if (fulfillment === "courier" && !address) {
+      toast.error("Please enter a delivery address");
+      return;
+    }
+
+    // If valid, open payment gateway
+    setShowPayment(true);
+  };
+
+  // Step 2: Actually create order (Called ONLY after Payment Success)
+  const handlePaymentSuccess = async () => {
+    setShowPayment(false); // Close modal
+    setLoading(true); // Show local loading state
+
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        toast.error("Please login to checkout");
-        router.push("/login");
-        return;
-      }
+      if (!user) throw new Error("User not found");
 
-      if (fulfillment === "pickup" && !selectedLocation) {
-        toast.error("Please select a pickup location");
-        setLoading(false);
-        return;
-      }
-
-      if (fulfillment === "courier" && !address) {
-        toast.error("Please enter a delivery address");
-        setLoading(false);
-        return;
-      }
-
-      // 1. Create Order
+      // 1. Create Order with 'paid' status (since gateway confirmed it)
       const { data: order, error: orderError } = await supabase
         .from("orders")
         .insert({
           customer_id: user.id,
-          total_amount: cartTotal,
-          status: "pending", // Pending payment/fulfillment
+          total_amount: finalTotal,
+          status: "paid", // <--- Important: It's now PAID
           fulfillment_type: fulfillment,
           pickup_location_id: fulfillment === "pickup" ? selectedLocation : null,
           delivery_address: fulfillment === "courier" ? address : null
@@ -100,7 +115,6 @@ export default function CartPage() {
       router.push("/orders");
 
     } catch (error: unknown) {
-        // Fix the error handling types
         let msg = "Failed to place order";
         if (error instanceof Error) msg = error.message;
         else if (typeof error === 'object' && error !== null && 'message' in error) {
@@ -240,16 +254,24 @@ export default function CartPage() {
               <Separator />
               <div className="flex justify-between font-bold text-lg">
                 <span>Total</span>
-                <span>R {(cartTotal + (fulfillment === 'courier' ? 100 : 0)).toFixed(2)}</span>
+                <span>R {finalTotal.toFixed(2)}</span>
               </div>
               
-              <Button size="lg" className="w-full" onClick={handleCheckout} disabled={loading}>
-                {loading ? "Processing..." : "Place Order"}
+              <Button size="lg" className="w-full" onClick={handleInitiateCheckout} disabled={loading}>
+                {loading ? "Processing..." : "Proceed to Checkout"}
               </Button>
             </CardContent>
           </Card>
         </div>
       </div>
+
+      {/* Payment Gateway Modal */}
+      <MockPaymentDialog 
+        open={showPayment} 
+        onOpenChange={setShowPayment} 
+        amount={finalTotal}
+        onConfirm={handlePaymentSuccess}
+      />
     </div>
   );
 }
