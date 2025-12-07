@@ -5,6 +5,11 @@ import Navigation from "@/components/Navigation";
 import Footer from "@/components/Footer";
 import { CartProvider } from "@/context/CartContext";
 import { Toaster } from "@/components/ui/sonner";
+import CookieConsent from "@/components/CookieConsent";
+import Analytics from "@/components/Analytics";
+import { Suspense } from "react";
+// 1. Import Script
+import Script from "next/script";
 
 export const metadata: Metadata = {
   title: "Fashion Store",
@@ -33,7 +38,17 @@ export default function RootLayout({
                 </main>
                 <Footer />
               </div>
+              <CookieConsent />
               <Toaster />
+              <Suspense fallback={null}>
+                <Analytics />
+              </Suspense>
+              
+              {/* 2. Load Google Maps Strategy */}
+              <Script
+                src={`https://maps.googleapis.com/maps/api/js?key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_KEY}&libraries=places`}
+                strategy="beforeInteractive"
+              />
             </CartProvider>
         </ThemeProvider>
       </body>

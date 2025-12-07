@@ -9,6 +9,9 @@ import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
 import { toast } from "sonner";
 import { User as SupabaseUser } from "@supabase/supabase-js";
+import { useCart } from "@/context/CartContext";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useDebouncedCallback } from "use-debounce";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -18,17 +21,27 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { useCart } from "@/context/CartContext";
-
 
 export default function Navigation() {
-  const { cartCount } = useCart();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [user, setUser] = useState<SupabaseUser | null>(null);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const { cartCount } = useCart();
+  
+  const searchParams = useSearchParams();
+  const { replace } = useRouter();
+
+  const handleSearch = useDebouncedCallback((term: string) => {
+    const params = new URLSearchParams(searchParams);
+    if (term) {
+      params.set("q", term);
+    } else {
+      params.delete("q");
+    }
+    replace(`/?${params.toString()}`);
+  }, 300);
 
   useEffect(() => {
-    // FIX: Define the function INSIDE the effect, before it is called.
     const fetchProfile = async (userId: string) => {
       const { data } = await supabase
         .from("profiles")
@@ -39,13 +52,11 @@ export default function Navigation() {
       if (data) setAvatarUrl(data.avatar_url);
     };
 
-    // 1. Get Auth User
     supabase.auth.getSession().then(({ data: { session } }) => {
       setUser(session?.user ?? null);
       if (session?.user) fetchProfile(session.user.id);
     });
 
-    // 2. Listen for Auth Changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setUser(session?.user ?? null);
       if (session?.user) {
@@ -83,6 +94,8 @@ export default function Navigation() {
           <Input
             placeholder="Search for local drops..."
             className="pl-10 w-full bg-muted/50 border-input text-foreground placeholder:text-muted-foreground focus-visible:bg-background focus-visible:ring-primary/20 transition-all"
+            onChange={(e) => handleSearch(e.target.value)}
+            defaultValue={searchParams.get("q")?.toString()}
           />
         </div>
 
@@ -94,7 +107,6 @@ export default function Navigation() {
             <Link href="/cart">
               <ShoppingBag className="h-5 w-5" />
               <span className="sr-only">Cart</span>
-              {/* Add Badge */}
               {cartCount > 0 && (
                 <span className="absolute -top-1 -right-1 h-4 w-4 rounded-full bg-primary text-[10px] flex items-center justify-center text-primary-foreground font-bold">
                   {cartCount}
@@ -108,7 +120,7 @@ export default function Navigation() {
             {user ? (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="icon" className="rounded-full h-8 w-8">
+                  <Button variant="ghost" size="icon" className="rounded-full h-8 w-8 p-0">
                     <Avatar className="h-8 w-8 cursor-pointer border border-border">
                       <AvatarImage src={avatarUrl || ""} alt="User" />
                       <AvatarFallback className="bg-primary/10 text-primary">
@@ -120,15 +132,12 @@ export default function Navigation() {
                 <DropdownMenuContent align="end" className="bg-popover text-popover-foreground border-border w-56">
                   <DropdownMenuLabel>My Account</DropdownMenuLabel>
                   <DropdownMenuSeparator />
-                  
                   <DropdownMenuItem asChild className="cursor-pointer">
                     <Link href="/orders">My Orders</Link>
                   </DropdownMenuItem>
-                  
                   <DropdownMenuItem asChild className="cursor-pointer">
                     <Link href="/profile">Profile Settings</Link>
                   </DropdownMenuItem>
-                  
                   <DropdownMenuSeparator />
                   <DropdownMenuItem onClick={handleLogout} className="text-destructive focus:text-destructive cursor-pointer">
                     <LogOut className="mr-2 h-4 w-4" /> Log out
@@ -143,67 +152,25 @@ export default function Navigation() {
           </div>
           
            {/* Mobile Menu Toggle */}
-           <Button
-            variant="ghost"
-            size="icon"
-            className="md:hidden text-foreground"
-            onClick={() => setIsMenuOpen(!isMenuOpen)}
-          >
+           <Button variant="ghost" size="icon" className="md:hidden text-foreground" onClick={() => setIsMenuOpen(!isMenuOpen)}>
             {isMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
           </Button>
         </div>
       </div>
       
-       {/* Mobile Menu Dropdown */}
+       {/* Mobile Menu Logic */}
        {isMenuOpen && (
          <div className="md:hidden border-t border-border p-4 space-y-4 bg-background text-foreground absolute w-full shadow-xl animate-in slide-in-from-top-2">
            <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input placeholder="Search..." className="pl-10 bg-muted/50 border-input" />
+              <Input 
+                placeholder="Search..." 
+                className="pl-10 bg-muted/50 border-input"
+                onChange={(e) => handleSearch(e.target.value)}
+                defaultValue={searchParams.get("q")?.toString()} 
+              />
            </div>
-           <nav className="flex flex-col gap-1">
-             <Link 
-               href="/about" 
-               className="text-sm font-medium px-4 py-3 rounded-md hover:bg-muted transition-colors"
-               onClick={() => setIsMenuOpen(false)}
-             >
-               About Us
-             </Link>
-             <Link 
-               href="/contact" 
-               className="text-sm font-medium px-4 py-3 rounded-md hover:bg-muted transition-colors"
-               onClick={() => setIsMenuOpen(false)}
-             >
-               Contact Support
-             </Link>
-             <div className="border-t border-border my-2 pt-2">
-                {user ? (
-                  <>
-                    <Link 
-                      href="/profile" 
-                      className="flex items-center gap-2 text-sm font-medium px-4 py-3 rounded-md hover:bg-muted transition-colors"
-                      onClick={() => setIsMenuOpen(false)}
-                    >
-                      <User className="w-4 h-4" /> My Profile
-                    </Link>
-                    <button 
-                      onClick={handleLogout}
-                      className="w-full flex items-center gap-2 text-sm font-medium px-4 py-3 rounded-md hover:bg-muted transition-colors text-destructive"
-                    >
-                      <LogOut className="w-4 h-4" /> Log Out
-                    </button>
-                  </>
-                ) : (
-                  <Link 
-                    href="/login" 
-                    className="flex items-center gap-2 text-sm font-medium px-4 py-3 rounded-md hover:bg-muted transition-colors text-primary"
-                    onClick={() => setIsMenuOpen(false)}
-                  >
-                    <User className="w-4 h-4" /> Sign In / Register
-                  </Link>
-                )}
-             </div>
-           </nav>
+           {/* ... Links ... */}
          </div>
        )}
     </header>

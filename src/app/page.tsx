@@ -3,34 +3,45 @@ import { Card, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import Link from "next/link";
 import Image from "next/image";
+import AddToCartButton from "@/components/AddToCartButton";
+import { ArrowRight } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 export const revalidate = 0;
 
-export default async function Index() {
-  const { data: products, error } = await supabase
+interface Props {
+  searchParams: Promise<{ q?: string }>;
+}
+
+export default async function Index({ searchParams }: Props) {
+  const { q } = await searchParams;
+
+  let query = supabase
     .from("products")
     .select(`
       *,
       inventory (
         quantity,
-        locations (
-          type
-        )
+        locations ( type )
       )
     `);
 
-  if (error) {
-    console.error(error);
-    return <div className="p-10 text-center text-destructive">Error loading products.</div>;
+  if (q) {
+    query = query.ilike('name', `%${q}%`);
   }
 
+  const { data: products, error } = await query;
+
+  if (error) return <div className="p-10 text-center">Error loading products.</div>;
+
   return (
-    // FIX: Using 'container mx-auto px-4' to match Navigation exactly
     <div className="container mx-auto px-4 py-12">
       <div className="flex justify-between items-end mb-8">
         <div>
           <h1 className="text-4xl font-extrabold tracking-tight">Latest Drops</h1>
-          <p className="text-muted-foreground mt-2">Fresh local fashion, available now.</p>
+          <p className="text-muted-foreground mt-2">
+            {q ? `Showing results for "${q}"` : "Fresh local fashion, available now."}
+          </p>
         </div>
       </div>
       
@@ -75,20 +86,20 @@ export default async function Index() {
                 </p>
               </CardHeader>
 
-              <CardFooter className="p-5 pt-0 flex justify-between items-center">
-                <div className="flex items-center gap-2">
-                  <span className={`w-2 h-2 rounded-full ${totalStock > 0 ? 'bg-green-500' : 'bg-red-500'}`} />
-                  <span className="text-xs font-medium text-muted-foreground">
-                    {totalStock > 0 ? `${totalStock} Available` : "Out of Stock"}
-                  </span>
+              <CardFooter className="p-5 pt-0 flex gap-3">
+                <div className="flex-1">
+                  <AddToCartButton 
+                    product={product} 
+                    disabled={totalStock === 0} 
+                    className="w-full"
+                  />
                 </div>
                 
-                <Link 
-                  href={`/product/${product.id}`}
-                  className={`inline-flex h-9 items-center justify-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground shadow transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 ${totalStock === 0 ? "pointer-events-none opacity-50" : ""}`}
-                >
-                  View Details
-                </Link>
+                <Button asChild variant="outline" size="icon" className="shrink-0">
+                  <Link href={`/product/${product.id}`}>
+                    <ArrowRight className="h-4 w-4" />
+                  </Link>
+                </Button>
               </CardFooter>
             </Card>
           );

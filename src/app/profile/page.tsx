@@ -11,6 +11,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { toast } from "sonner";
 import { Loader2, Upload, User as UserIcon } from "lucide-react";
 import { User } from "@supabase/supabase-js";
+import { SmartPhoneInput } from "@/components/ui/phone-input";
 
 interface ProfileData {
   first_name: string;
@@ -201,10 +202,9 @@ export default function ProfilePage() {
           </div>
           <div className="space-y-2">
             <Label>Phone Number</Label>
-            <Input 
+            <SmartPhoneInput 
                 value={profile.phone} 
-                onChange={e => setProfile({...profile, phone: e.target.value})}
-                className="bg-background border-input"
+                onChange={val => setProfile({...profile, phone: val})} 
             />
           </div>
         </CardContent>

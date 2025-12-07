@@ -11,7 +11,24 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
-import { Loader2, Chrome } from "lucide-react";
+import { Loader2, Chrome, Check } from "lucide-react";
+import { SmartPhoneInput } from "@/components/ui/phone-input";
+import { z } from "zod";
+import { validatePassword } from "@/lib/password"; // Import the strict validator
+
+const getErrorMessage = (error: unknown) => {
+  if (error instanceof Error) return error.message;
+  if (typeof error === "object" && error !== null && "message" in error) {
+    return String((error as { message: unknown }).message);
+  }
+  return "An unexpected error occurred";
+};
+
+const signupSchema = z.object({
+  email: z.string().email("Please enter a valid email address"),
+  firstName: z.string().min(2, "First name is required"),
+  phone: z.string().min(10, "Valid phone number is required"),
+});
 
 export default function AuthPage() {
   const router = useRouter();
@@ -25,6 +42,7 @@ export default function AuthPage() {
   const [formData, setFormData] = useState({
     email: "",
     password: "",
+    confirmPassword: "",
     firstName: "",
     lastName: "",
     phone: "",
@@ -33,17 +51,18 @@ export default function AuthPage() {
     zip: ""
   });
 
+  // FIX: Match rules in password.ts (Min 12 chars)
+  const passwordCriteria = {
+    length: formData.password.length >= 12,
+    match: formData.password.length > 0 && formData.password === formData.confirmPassword
+  };
+
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData({ ...formData, [e.target.id]: e.target.value });
   };
 
-  // Helper to safely extract error messages
-  const getErrorMessage = (error: unknown) => {
-    if (error instanceof Error) return error.message;
-    if (typeof error === "object" && error !== null && "message" in error) {
-      return String((error as { message: unknown }).message);
-    }
-    return "An unexpected error occurred";
+  const handlePhoneChange = (value: string) => {
+    setFormData(prev => ({ ...prev, phone: value }));
   };
 
   const handleSocialLogin = async (provider: 'google' | 'apple') => {
@@ -81,8 +100,33 @@ export default function AuthPage() {
   };
 
   const handleSignup = async () => {
+    // 1. Check strict password rules using the library
+    // We pass the user's name/email so it can check for PII (Personally Identifiable Info)
+    const passwordCheck = await validatePassword(formData.password, [
+        formData.email, 
+        formData.firstName, 
+        formData.lastName
+    ]);
+
+    if (!passwordCheck.isValid) {
+        toast.error(passwordCheck.feedback[0] || "Password is too weak");
+        return;
+    }
+
+    if (!passwordCriteria.match) {
+      toast.error("Passwords do not match");
+      return;
+    }
+
     setLoading(true);
     try {
+      const validation = signupSchema.safeParse(formData);
+      if (!validation.success) {
+        toast.error(validation.error.issues[0].message);
+        setLoading(false);
+        return;
+      }
+
       const { error } = await supabase.auth.signUp({
         email: formData.email,
         password: formData.password,
@@ -119,7 +163,6 @@ export default function AuthPage() {
           <TabsTrigger value="signup">Sign Up</TabsTrigger>
         </TabsList>
         
-        {/* LOGIN TAB */}
         <TabsContent value="login">
           <Card>
             <CardHeader>
@@ -155,7 +198,6 @@ export default function AuthPage() {
                 Continue with Google
               </Button>
             </CardContent>
-            {/* Using CardFooter here to satisfy linter and for semantics */}
             <CardFooter className="justify-center">
               <p className="text-xs text-muted-foreground">
                 By clicking continue, you agree to our Terms of Service.
@@ -164,7 +206,6 @@ export default function AuthPage() {
           </Card>
         </TabsContent>
 
-        {/* SIGN UP TAB */}
         <TabsContent value="signup">
           <Card>
             <CardHeader>
@@ -172,7 +213,6 @@ export default function AuthPage() {
               <CardDescription>Enter your details to get started.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              {/* Core Info */}
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="firstName">First name</Label>
@@ -190,16 +230,47 @@ export default function AuthPage() {
               </div>
               
               <div className="space-y-2">
-                <Label htmlFor="password">Password</Label>
-                <Input id="password" type="password" value={formData.password} onChange={handleInputChange} />
+                <Label htmlFor="phone">Phone Number</Label>
+                <SmartPhoneInput 
+                  value={formData.phone} 
+                  onChange={handlePhoneChange} 
+                  placeholder="76 123 4567" 
+                />
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="phone">Phone Number (Optional)</Label>
-                <Input id="phone" type="tel" placeholder="+27 12 345 6789" value={formData.phone} onChange={handleInputChange} />
+              <div className="space-y-3 pt-2">
+                <div className="space-y-2">
+                  <Label htmlFor="password">Password</Label>
+                  <Input id="password" type="password" value={formData.password} onChange={handleInputChange} />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="confirmPassword">Confirm Password</Label>
+                  <Input id="confirmPassword" type="password" value={formData.confirmPassword} onChange={handleInputChange} />
+                </div>
+
+                <div className="space-y-1.5 pt-1">
+                  <div className="flex items-center gap-2 text-xs">
+                    {passwordCriteria.length ? 
+                      <Check className="w-3 h-3 text-green-500" /> : 
+                      <div className="w-3 h-3 rounded-full border border-muted-foreground/30" />
+                    }
+                    {/* FIX: Updated text to match password.ts */}
+                    <span className={passwordCriteria.length ? "text-green-600" : "text-muted-foreground"}>
+                      At least 12 characters
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2 text-xs">
+                    {passwordCriteria.match ? 
+                      <Check className="w-3 h-3 text-green-500" /> : 
+                      <div className="w-3 h-3 rounded-full border border-muted-foreground/30" />
+                    }
+                    <span className={passwordCriteria.match ? "text-green-600" : "text-muted-foreground"}>
+                      Passwords match
+                    </span>
+                  </div>
+                </div>
               </div>
 
-              {/* Optional Billing Info - Collapsible */}
               <Accordion type="single" collapsible className="w-full">
                 <AccordionItem value="billing">
                   <AccordionTrigger className="text-sm text-muted-foreground hover:no-underline">
@@ -240,10 +311,9 @@ export default function AuthPage() {
                 Sign up with Google
               </Button>
             </CardContent>
-            {/* Using CardFooter here to satisfy linter and for semantics */}
             <CardFooter className="justify-center">
               <p className="text-xs text-muted-foreground">
-                We&lsquo;ll never share your data without permission.
+                We&apos;ll never share your data without permission.
               </p>
             </CardFooter>
           </Card>

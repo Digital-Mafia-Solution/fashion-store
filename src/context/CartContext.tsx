@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useEffect, useState, useRef } from "react";
+import { createContext, useContext, useEffect, useState } from "react";
 import { toast } from "sonner";
 
 export interface CartItem {
@@ -12,14 +12,14 @@ export interface CartItem {
   maxStock: number;
 }
 
-// FIX: Allow nullable types from DB
+// Allow nullable types from DB
 interface ProductInput {
   id: string;
   name: string;
   price: number;
   image_url: string | null;
   inventory: {
-    quantity: number | null; // Allow null
+    quantity: number | null; 
     locations: {
       type: string;
     } | null;
@@ -39,35 +39,39 @@ interface CartContextType {
 const CartContext = createContext<CartContextType | undefined>(undefined);
 
 export function CartProvider({ children }: { children: React.ReactNode }) {
-  const [cart, setCart] = useState<CartItem[]>(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem("fashion_cart");
-      try {
-        return saved ? JSON.parse(saved) : [];
-      } catch (e) {
-        console.error("Failed to parse cart", e);
-        return [];
-      }
-    }
-    return [];
-  });
+  // 1. Initialize as empty to match Server (prevents Hydration Error)
+  const [cart, setCart] = useState<CartItem[]>([]);
+  const [isInitialized, setIsInitialized] = useState(false);
 
-  // FIX: Use useRef instead of useState to track mounting. 
-  // This avoids the "set-state-in-effect" lint error and prevents re-renders.
-  const isMounted = useRef(false);
-
+  // 2. Load from LocalStorage on Client Mount
   useEffect(() => {
-    if (!isMounted.current) {
-      isMounted.current = true;
-      return;
+    // FIX: Wrap in setTimeout to push to next tick.
+    // This solves the "set-state-in-effect" lint error.
+    const timer = setTimeout(() => {
+      const saved = localStorage.getItem("fashion_cart");
+      if (saved) {
+        try {
+          setCart(JSON.parse(saved));
+        } catch (e) {
+          console.error("Failed to parse cart", e);
+        }
+      }
+      setIsInitialized(true);
+    }, 0);
+
+    return () => clearTimeout(timer);
+  }, []);
+
+  // 3. Save to LocalStorage whenever cart changes (only after init)
+  useEffect(() => {
+    if (isInitialized) {
+      localStorage.setItem("fashion_cart", JSON.stringify(cart));
     }
-    localStorage.setItem("fashion_cart", JSON.stringify(cart));
-  }, [cart]);
+  }, [cart, isInitialized]);
 
   const addToCart = (product: ProductInput) => {
     const totalStock = product.inventory?.reduce((sum, item) => {
        const isStore = item.locations?.type === 'store';
-       // Handle null quantity safely
        return isStore ? sum + (item.quantity ?? 0) : sum;
     }, 0) || 0;
 

@@ -11,7 +11,7 @@ export default function CookieConsent() {
     const timer = setTimeout(() => {
       const consent = localStorage.getItem("cookie_consent");
       if (!consent) setShow(true);
-    }, 500);
+    }, 1000);
     return () => clearTimeout(timer);
   }, []);
 
