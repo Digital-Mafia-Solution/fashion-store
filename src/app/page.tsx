@@ -1,109 +1,111 @@
 import { supabase } from "@/lib/supabase";
-import { Card, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import Link from "next/link";
 import Image from "next/image";
 import AddToCartButton from "@/components/AddToCartButton";
-import { ArrowRight } from "lucide-react";
-import { Button } from "@/components/ui/button";
 
 export const revalidate = 0;
 
 interface Props {
-  searchParams: Promise<{ q?: string }>;
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }
 
 export default async function Index({ searchParams }: Props) {
   const { q } = await searchParams;
 
-  let query = supabase
-    .from("products")
-    .select(`
-      *,
-      inventory (
-        quantity,
-        locations ( type )
+  // FIX: Select inventory and nested location data to satisfy TypeScript and logic requirements
+  let query = supabase.from("products").select(`
+    *,
+    inventory (
+      quantity,
+      locations (
+        type
       )
-    `);
+    )
+  `);
 
-  if (q) {
-    query = query.ilike('name', `%${q}%`);
+  if (q && typeof q === "string") {
+    query = query.ilike("name", `%${q}%`);
   }
 
-  const { data: products, error } = await query;
-
-  if (error) return <div className="p-10 text-center">Error loading products.</div>;
+  const { data: products } = await query;
 
   return (
-    <div className="container mx-auto px-4 py-12">
+    <div className="container mx-auto px-4 py-12 mb-20">
       <div className="flex justify-between items-end mb-8">
         <div>
-          <h1 className="text-4xl font-extrabold tracking-tight">Latest Drops</h1>
+          <h1 className="text-4xl font-extrabold tracking-tight">
+            {q ? `Results for "${q}"` : "Latest Drops"}
+          </h1>
           <p className="text-muted-foreground mt-2">
-            {q ? `Showing results for "${q}"` : "Fresh local fashion, available now."}
+            {q
+              ? "Found the following items matching your search."
+              : "Fresh local fashion, available now."}
           </p>
         </div>
       </div>
-      
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
         {products?.map((product) => {
-          const totalStock = product.inventory?.reduce((sum, item) => {
-            const isStore = item.locations?.type === 'store';
-            return isStore ? sum + (item.quantity ?? 0) : sum;
-          }, 0) || 0;
-          
+          // FIX: Calculate stock level from the fetched inventory array
+          const stockLevel = product.inventory?.reduce((sum, item) => sum + (item.quantity || 0), 0) ?? 0;
+          const isSoldOut = stockLevel === 0;
+
           return (
-            <Card key={product.id} className="group hover:shadow-lg transition-all overflow-hidden border-border">
-              <div className="aspect-4/5 w-full bg-muted relative overflow-hidden">
+            <div key={product.id} className="group relative flex flex-col gap-2">
+              <Link href={`/product/${product.id}`} className="absolute inset-0 z-10">
+                <span className="sr-only">View {product.name}</span>
+              </Link>
+
+              <div className="aspect-square relative overflow-hidden rounded-lg bg-gray-100 shadow-sm transition-all duration-300 group-hover:shadow-md">
                 {product.image_url ? (
-                  <Image 
-                    src={product.image_url} 
+                  <Image
+                    src={product.image_url}
                     alt={product.name}
                     fill
                     className="object-cover transition-transform duration-500 group-hover:scale-105"
+                    sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 25vw"
                   />
                 ) : (
-                  <div className="flex items-center justify-center h-full text-muted-foreground">No Image</div>
+                  <div className="w-full h-full flex items-center justify-center text-muted-foreground">
+                    No Image
+                  </div>
                 )}
                 
-                {totalStock === 0 && (
-                  <div className="absolute inset-0 bg-black/60 flex items-center justify-center backdrop-blur-sm">
-                    <Badge variant="destructive" className="text-lg px-6 py-2">Sold Out</Badge>
+                {/* FIX: Use calculated stock status */}
+                {isSoldOut && (
+                  <div className="absolute top-2 right-2 bg-destructive text-destructive-foreground text-xs font-bold px-2 py-1 rounded">
+                    SOLD OUT
                   </div>
                 )}
               </div>
-
-              <CardHeader className="space-y-1 p-5">
-                <div className="flex justify-between items-start w-full">
-                  <div>
-                    <p className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">{product.category}</p>
-                    <CardTitle className="text-xl mt-1">{product.name}</CardTitle>
-                  </div>
-                  <span className="font-bold text-lg">R {product.price}</span>
+              
+              <div className="flex justify-between items-start mt-1">
+                <div>
+                  <h3 className="font-semibold text-lg leading-none tracking-tight group-hover:text-primary transition-colors">
+                    {product.name}
+                  </h3>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    {product.category || "Unisex"}
+                  </p>
                 </div>
-                <p className="text-sm text-muted-foreground line-clamp-2 leading-relaxed">
-                  {product.description}
-                </p>
-              </CardHeader>
-
-              <CardFooter className="p-5 pt-0 flex gap-3">
-                <div className="flex-1">
-                  <AddToCartButton 
-                    product={product} 
-                    disabled={totalStock === 0} 
-                    className="w-full"
-                  />
+                <div className="font-bold text-lg">
+                  R {product.price?.toFixed(2)}
                 </div>
-                
-                <Button asChild variant="outline" size="icon" className="shrink-0">
-                  <Link href={`/product/${product.id}`}>
-                    <ArrowRight className="h-4 w-4" />
-                  </Link>
-                </Button>
-              </CardFooter>
-            </Card>
+              </div>
+
+              <div className="z-20 mt-1">
+                {/* FIX: Passed product (which now includes inventory) and disabled state based on calculation */}
+                <AddToCartButton product={product} disabled={isSoldOut} />
+              </div>
+            </div>
           );
         })}
+        
+        {products?.length === 0 && (
+          <div className="col-span-full text-center py-20 text-muted-foreground">
+            No products found. Try a different search term.
+          </div>
+        )}
       </div>
     </div>
   );

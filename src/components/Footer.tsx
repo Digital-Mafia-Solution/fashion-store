@@ -2,9 +2,8 @@ import Link from "next/link";
 
 export default function Footer() {
   return (
-    // FIX: Use semantic colors (bg-background) and border-border
-    <footer className="w-full border-t bg-background/95 backdrop-blur supports-backdrop-filter:bg-background/60 py-8 mt-auto">
-      {/* FIX: Use px-4 to align with Header and Main Content */}
+    // FIX: Added pb-24 for mobile to account for the fixed bottom navigation bar
+    <footer className="w-full border-t bg-background/95 backdrop-blur supports-backdrop-filter:bg-background/60 py-8 pb-24 md:pb-8 mt-auto">
       <div className="container mx-auto px-4 flex flex-col md:flex-row items-center justify-between gap-4 text-sm text-muted-foreground">
         <div>
           © {new Date().getFullYear()} Digital Mafia Fashion. All rights reserved.

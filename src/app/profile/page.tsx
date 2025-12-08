@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { toast } from "sonner";
-import { Loader2, Upload, User as UserIcon } from "lucide-react";
+import { Loader2, Upload, User as UserIcon, LogOut } from "lucide-react";
 import { User } from "@supabase/supabase-js";
 
 interface ProfileData {
@@ -35,6 +35,7 @@ export default function ProfilePage() {
   
   // FIX 1: Added missing state for password change
   const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
 
   useEffect(() => {
     async function loadProfile() {
@@ -144,12 +145,18 @@ export default function ProfilePage() {
         return;
     }
 
+    if (newPassword !== confirmPassword) {
+        toast.error("Passwords do not match");
+        return;
+    }
+
     setSaving(true);
     try {
         const { error } = await supabase.auth.updateUser({ password: newPassword });
         if (error) throw error;
         toast.success("Password updated successfully");
         setNewPassword("");
+        setConfirmPassword("");
     } catch (error: unknown) {
         let msg = "Failed to update password";
         if (error instanceof Error) msg = error.message;
@@ -157,6 +164,13 @@ export default function ProfilePage() {
     } finally {
         setSaving(false);
     }
+  };
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    toast.success("Logged out successfully");
+    router.push("/login");
+    router.refresh();
   };
 
   if (loading) return <div className="flex justify-center p-20"><Loader2 className="animate-spin" /></div>;
@@ -246,25 +260,45 @@ export default function ProfilePage() {
             <CardDescription>Manage your password.</CardDescription>
         </CardHeader>
         <CardContent>
-            <div className="flex gap-4 items-end">
-            <div className="grid w-full items-center gap-1.5">
-                <Label htmlFor="password">New Password</Label>
-                <Input 
-                    type="password" 
-                    id="password" 
-                    placeholder="******" 
-                    value={newPassword}
-                    onChange={(e) => setNewPassword(e.target.value)} 
-                    className="bg-background border-input"
-                />
-            </div>
-            <Button onClick={handlePasswordChange} disabled={saving || !newPassword}>
-                {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Update
-            </Button>
+            <div className="grid gap-4">
+                <div className="grid w-full items-center gap-1.5">
+                    <Label htmlFor="password">New Password</Label>
+                    <Input 
+                        type="password" 
+                        id="password" 
+                        placeholder="******" 
+                        value={newPassword}
+                        onChange={(e) => setNewPassword(e.target.value)} 
+                    />
+                </div>
+                <div className="grid w-full items-center gap-1.5">
+                    <Label htmlFor="confirmPassword">Confirm New Password</Label>
+                    <Input 
+                        type="password" 
+                        id="confirmPassword" 
+                        placeholder="******" 
+                        value={confirmPassword}
+                        onChange={(e) => setConfirmPassword(e.target.value)} 
+                    />
+                </div>
+                <div className="flex justify-end mt-2">
+                    <Button onClick={handlePasswordChange} disabled={saving || !newPassword || !confirmPassword}>
+                        {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                        Update Password
+                    </Button>
+                </div>
             </div>
         </CardContent>
      </Card>
+     {/* Mobile Logout (Bottom Block) */}
+        <Button 
+            variant="destructive" 
+            className="w-full md:hidden mt-4" 
+            onClick={handleLogout}
+        >
+            <LogOut className="mr-2 h-4 w-4" />
+            Sign Out
+        </Button>
     </div>
   );
 }

@@ -5,6 +5,8 @@ import type { NextRequest } from "next/server";
 export async function GET(request: NextRequest) {
   const requestUrl = new URL(request.url);
   const code = requestUrl.searchParams.get("code");
+  // Get the 'next' param or default to root
+  const next = requestUrl.searchParams.get("next") || "/";
 
   if (code) {
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -15,6 +17,6 @@ export async function GET(request: NextRequest) {
     await supabase.auth.exchangeCodeForSession(code);
   }
 
-  // Redirect to home after sign in
-  return NextResponse.redirect(requestUrl.origin);
+  // Redirect to the specified next page (e.g., /update-password)
+  return NextResponse.redirect(new URL(next, requestUrl.origin));
 }

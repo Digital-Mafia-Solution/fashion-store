@@ -47,10 +47,14 @@ export default function AuthPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<"login" | "signup">("login");
+  const [resetMode, setResetMode] = useState(false); // New state for Forgot Password view
   
   // --- LOGIN STATE ---
   const [loginEmail, setLoginEmail] = useState("");
   const [loginPassword, setLoginPassword] = useState("");
+
+  // --- RESET PASSWORD STATE ---
+  const [resetEmail, setResetEmail] = useState("");
 
   // --- SIGNUP STATE ---
   const [signupStep, setSignupStep] = useState(1);
@@ -78,7 +82,6 @@ export default function AuthPage() {
     setFormData({ ...formData, [e.target.id]: e.target.value });
   };
 
-  // FIX: This helper is now used below
   const handlePhoneChange = (value: string) => {
     setFormData(prev => ({ ...prev, phone: value }));
   };
@@ -86,10 +89,11 @@ export default function AuthPage() {
   const handleSocialLogin = async (provider: 'google' | 'apple') => {
     setLoading(true);
     try {
+      const origin = process.env.NEXT_PUBLIC_SITE_URL || window.location.origin;
       const { error } = await supabase.auth.signInWithOAuth({
         provider,
         options: {
-          redirectTo: `${window.location.origin}/auth/callback`,
+          redirectTo: `${origin}/auth/callback`,
         },
       });
       if (error) throw error;
@@ -114,6 +118,29 @@ export default function AuthPage() {
       toast.error(getErrorMessage(error));
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleResetPassword = async () => {
+    if (!resetEmail || !/\S+@\S+\.\S+/.test(resetEmail)) {
+        toast.error("Please enter a valid email address");
+        return;
+    }
+
+    setLoading(true);
+    try {
+        const origin = process.env.NEXT_PUBLIC_SITE_URL || window.location.origin;
+        // Redirect to the dedicated update-password page
+        const { error } = await supabase.auth.resetPasswordForEmail(resetEmail, {
+            redirectTo: `${origin}/auth/callback?next=/update-password`,
+        });
+        if (error) throw error;
+        toast.success("Check your email for the password reset link");
+        setResetMode(false);
+    } catch (error: unknown) {
+        toast.error(getErrorMessage(error));
+    } finally {
+        setLoading(false);
     }
   };
 
@@ -213,188 +240,227 @@ export default function AuthPage() {
   return (
     <div className="flex items-center justify-center min-h-[calc(100vh-4rem)] px-4 py-8 bg-muted/20">
       <Card className="w-full max-w-md shadow-lg border-border">
-        <Tabs 
-          value={activeTab} 
-          // FIX: Removed 'any' by using string literal union type
-          onValueChange={(v) => setActiveTab(v as "login" | "signup")} 
-          className="w-full"
-        >
-          <div className="px-6 pt-6">
-            <TabsList className="grid w-full grid-cols-2">
-              <TabsTrigger value="login">Login</TabsTrigger>
-              <TabsTrigger value="signup">Sign Up</TabsTrigger>
-            </TabsList>
-          </div>
-          
-          {/* --- LOGIN TAB --- */}
-          <TabsContent value="login">
-            <CardHeader>
-              <CardTitle>Welcome back</CardTitle>
-              <CardDescription>Enter your credentials to access your account.</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="loginEmail">Email</Label>
-                <Input id="loginEmail" type="email" value={loginEmail} onChange={(e) => setLoginEmail(e.target.value)} placeholder="m@example.com" />
-              </div>
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <Label htmlFor="loginPassword">Password</Label>
-                  <Button variant="link" className="px-0 font-normal h-auto text-xs">Forgot password?</Button>
+        {resetMode ? (
+            // --- RESET PASSWORD VIEW ---
+            <>
+                <CardHeader>
+                    <CardTitle>Reset Password</CardTitle>
+                    <CardDescription>Enter your email to receive a reset link.</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                    <div className="space-y-2">
+                        <Label htmlFor="resetEmail">Email</Label>
+                        <Input 
+                            id="resetEmail" 
+                            type="email" 
+                            value={resetEmail} 
+                            onChange={(e) => setResetEmail(e.target.value)} 
+                            placeholder="m@example.com" 
+                        />
+                    </div>
+                    <Button className="w-full" onClick={handleResetPassword} disabled={loading}>
+                        {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                        Send Reset Link
+                    </Button>
+                    <Button 
+                        variant="ghost" 
+                        className="w-full" 
+                        onClick={() => setResetMode(false)}
+                        disabled={loading}
+                    >
+                        Back to Login
+                    </Button>
+                </CardContent>
+            </>
+        ) : (
+            // --- LOGIN / SIGNUP TABS ---
+            <Tabs 
+            value={activeTab} 
+            onValueChange={(v) => setActiveTab(v as "login" | "signup")} 
+            className="w-full"
+            >
+            <div className="px-6 pt-6">
+                <TabsList className="grid w-full grid-cols-2">
+                <TabsTrigger value="login">Login</TabsTrigger>
+                <TabsTrigger value="signup">Sign Up</TabsTrigger>
+                </TabsList>
+            </div>
+            
+            {/* --- LOGIN TAB --- */}
+            <TabsContent value="login">
+                <CardHeader>
+                <CardTitle>Welcome back</CardTitle>
+                <CardDescription>Enter your credentials to access your account.</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                <div className="space-y-2">
+                    <Label htmlFor="loginEmail">Email</Label>
+                    <Input id="loginEmail" type="email" value={loginEmail} onChange={(e) => setLoginEmail(e.target.value)} placeholder="m@example.com" />
                 </div>
-                <Input id="loginPassword" type="password" value={loginPassword} onChange={(e) => setLoginPassword(e.target.value)} />
-              </div>
-              
-              <Button className="w-full" onClick={handleLogin} disabled={loading}>
-                {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Sign In
-              </Button>
+                <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                        <Label htmlFor="loginPassword">Password</Label>
+                        <Button 
+                            variant="link" 
+                            className="px-0 font-normal h-auto text-xs text-primary"
+                            onClick={() => setResetMode(true)}
+                        >
+                            Forgot password?
+                        </Button>
+                    </div>
+                    <Input id="loginPassword" type="password" value={loginPassword} onChange={(e) => setLoginPassword(e.target.value)} />
+                </div>
+                
+                <Button className="w-full" onClick={handleLogin} disabled={loading}>
+                    {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    Sign In
+                </Button>
 
-              <div className="flex items-center gap-4 my-4">
-                <Separator className="flex-1" />
-                <span className="text-xs text-muted-foreground">OR</span>
-                <Separator className="flex-1" />
-              </div>
-
-              <Button variant="outline" className="w-full" onClick={() => handleSocialLogin('google')} disabled={loading}>
-                <Chrome className="mr-2 h-4 w-4" />
-                Continue with Google
-              </Button>
-            </CardContent>
-          </TabsContent>
-
-          {/* --- SIGN UP TAB (WIZARD) --- */}
-          <TabsContent value="signup">
-            <CardHeader>
-              <CardTitle>Create an account</CardTitle>
-              <CardDescription>
-                Step {signupStep} of 3: 
-                {signupStep === 1 && " Security"}
-                {signupStep === 2 && " Personal Info"}
-                {signupStep === 3 && " Contact"}
-              </CardDescription>
-              {/* Progress Bar */}
-              <div className="h-1 w-full bg-secondary mt-2 rounded-full overflow-hidden">
-                <div 
-                    className="h-full bg-primary transition-all duration-300 ease-in-out" 
-                    style={{ width: `${(signupStep / 3) * 100}%` }}
-                />
-              </div>
-            </CardHeader>
-
-            <CardContent className="space-y-4 min-h-[300px]">
-              
-              {/* STEP 1: CREDENTIALS */}
-              {signupStep === 1 && (
-                <div className="space-y-4 animate-in slide-in-from-right-4 duration-300">
-                   <Button variant="outline" className="w-full mb-4" onClick={() => handleSocialLogin('google')} disabled={loading}>
-                    <Chrome className="mr-2 h-4 w-4" />
-                    Sign up with Google
-                  </Button>
-                  
-                  <div className="flex items-center gap-4 mb-4">
+                <div className="flex items-center gap-4 my-4">
                     <Separator className="flex-1" />
                     <span className="text-xs text-muted-foreground">OR</span>
                     <Separator className="flex-1" />
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="email">Email</Label>
-                    <Input id="email" type="email" placeholder="m@example.com" value={formData.email} onChange={handleInputChange} />
-                  </div>
-                  
-                  <div className="space-y-3 pt-1">
-                    <div className="space-y-2">
-                      <Label htmlFor="password">Password</Label>
-                      <Input id="password" type="password" value={formData.password} onChange={handleInputChange} />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="confirmPassword">Confirm Password</Label>
-                      <Input id="confirmPassword" type="password" value={formData.confirmPassword} onChange={handleInputChange} />
-                    </div>
-
-                    {/* Hints */}
-                    <div className="space-y-1.5 pt-1">
-                      <div className="flex items-center gap-2 text-xs">
-                        {passwordCriteria.length ? <Check className="w-3 h-3 text-green-500" /> : <div className="w-3 h-3 rounded-full border border-muted-foreground/30" />}
-                        <span className={passwordCriteria.length ? "text-green-600" : "text-muted-foreground"}>At least 12 characters</span>
-                      </div>
-                      <div className="flex items-center gap-2 text-xs">
-                        {passwordCriteria.match ? <Check className="w-3 h-3 text-green-500" /> : <div className="w-3 h-3 rounded-full border border-muted-foreground/30" />}
-                        <span className={passwordCriteria.match ? "text-green-600" : "text-muted-foreground"}>Passwords match</span>
-                      </div>
-                    </div>
-                  </div>
                 </div>
-              )}
 
-              {/* STEP 2: PERSONAL INFO */}
-              {signupStep === 2 && (
-                <div className="space-y-4 animate-in slide-in-from-right-4 duration-300">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="firstName">First name</Label>
-                      <Input id="firstName" placeholder="John" value={formData.firstName} onChange={handleInputChange} autoFocus />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="lastName">Last name</Label>
-                      <Input id="lastName" placeholder="Doe" value={formData.lastName} onChange={handleInputChange} />
-                    </div>
-                  </div>
-                  <p className="text-sm text-muted-foreground">
-                    We use your name to personalize your experience and for order pickups.
-                  </p>
-                </div>
-              )}
-
-              {/* STEP 3: CONTACT & ADDRESS */}
-              {signupStep === 3 && (
-                <div className="space-y-4 animate-in slide-in-from-right-4 duration-300">
-                  <div className="space-y-2">
-                    <Label>Phone Number</Label>
-                    {/* FIX: Use the handler here */}
-                    <SmartPhoneInput 
-                      value={formData.phone} 
-                      onChange={handlePhoneChange} 
-                      placeholder="76 123 4567" 
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label>Billing Address (Optional)</Label>
-                    <AddressAutocomplete 
-                        onAddressSelect={(addr) => setFormData({...formData, address: addr})}
-                        defaultValue={formData.address}
-                    />
-                    <p className="text-xs text-muted-foreground">Used for faster checkout if you choose delivery.</p>
-                  </div>
-                </div>
-              )}
-
-            </CardContent>
-
-            <CardFooter className="flex justify-between">
-              {signupStep > 1 ? (
-                <Button variant="outline" onClick={prevStep} disabled={loading}>
-                  <ArrowLeft className="mr-2 h-4 w-4" /> Back
+                <Button variant="outline" className="w-full" onClick={() => handleSocialLogin('google')} disabled={loading}>
+                    <Chrome className="mr-2 h-4 w-4" />
+                    Continue with Google
                 </Button>
-              ) : (
-                <div /> /* Spacer */
-              )}
+                </CardContent>
+            </TabsContent>
 
-              {signupStep < 3 ? (
-                 <Button onClick={nextStep} disabled={loading}>
-                    Next <ArrowRight className="ml-2 h-4 w-4" />
-                 </Button>
-              ) : (
-                 <Button onClick={handleFinalSignup} disabled={loading}>
-                    {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                    Create Account
-                 </Button>
-              )}
-            </CardFooter>
-          </TabsContent>
-        </Tabs>
+            {/* --- SIGN UP TAB (WIZARD) --- */}
+            <TabsContent value="signup">
+                <CardHeader>
+                <CardTitle>Create an account</CardTitle>
+                <CardDescription>
+                    Step {signupStep} of 3: 
+                    {signupStep === 1 && " Security"}
+                    {signupStep === 2 && " Personal Info"}
+                    {signupStep === 3 && " Contact"}
+                </CardDescription>
+                {/* Progress Bar */}
+                <div className="h-1 w-full bg-secondary mt-2 rounded-full overflow-hidden">
+                    <div 
+                        className="h-full bg-primary transition-all duration-300 ease-in-out" 
+                        style={{ width: `${(signupStep / 3) * 100}%` }}
+                    />
+                </div>
+                </CardHeader>
+
+                <CardContent className="space-y-4 min-h-[300px]">
+                
+                {/* STEP 1: CREDENTIALS */}
+                {signupStep === 1 && (
+                    <div className="space-y-4 animate-in slide-in-from-right-4 duration-300">
+                    <Button variant="outline" className="w-full mb-4" onClick={() => handleSocialLogin('google')} disabled={loading}>
+                        <Chrome className="mr-2 h-4 w-4" />
+                        Sign up with Google
+                    </Button>
+                    
+                    <div className="flex items-center gap-4 mb-4">
+                        <Separator className="flex-1" />
+                        <span className="text-xs text-muted-foreground">OR</span>
+                        <Separator className="flex-1" />
+                    </div>
+
+                    <div className="space-y-2">
+                        <Label htmlFor="email">Email</Label>
+                        <Input id="email" type="email" placeholder="m@example.com" value={formData.email} onChange={handleInputChange} />
+                    </div>
+                    
+                    <div className="space-y-3 pt-1">
+                        <div className="space-y-2">
+                        <Label htmlFor="password">Password</Label>
+                        <Input id="password" type="password" value={formData.password} onChange={handleInputChange} />
+                        </div>
+                        <div className="space-y-2">
+                        <Label htmlFor="confirmPassword">Confirm Password</Label>
+                        <Input id="confirmPassword" type="password" value={formData.confirmPassword} onChange={handleInputChange} />
+                        </div>
+
+                        {/* Hints */}
+                        <div className="space-y-1.5 pt-1">
+                        <div className="flex items-center gap-2 text-xs">
+                            {passwordCriteria.length ? <Check className="w-3 h-3 text-green-500" /> : <div className="w-3 h-3 rounded-full border border-muted-foreground/30" />}
+                            <span className={passwordCriteria.length ? "text-green-600" : "text-muted-foreground"}>At least 12 characters</span>
+                        </div>
+                        <div className="flex items-center gap-2 text-xs">
+                            {passwordCriteria.match ? <Check className="w-3 h-3 text-green-500" /> : <div className="w-3 h-3 rounded-full border border-muted-foreground/30" />}
+                            <span className={passwordCriteria.match ? "text-green-600" : "text-muted-foreground"}>Passwords match</span>
+                        </div>
+                        </div>
+                    </div>
+                    </div>
+                )}
+
+                {/* STEP 2: PERSONAL INFO */}
+                {signupStep === 2 && (
+                    <div className="space-y-4 animate-in slide-in-from-right-4 duration-300">
+                    <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                        <Label htmlFor="firstName">First name</Label>
+                        <Input id="firstName" placeholder="John" value={formData.firstName} onChange={handleInputChange} autoFocus />
+                        </div>
+                        <div className="space-y-2">
+                        <Label htmlFor="lastName">Last name</Label>
+                        <Input id="lastName" placeholder="Doe" value={formData.lastName} onChange={handleInputChange} />
+                        </div>
+                    </div>
+                    <p className="text-sm text-muted-foreground">
+                        We use your name to personalize your experience and for order pickups.
+                    </p>
+                    </div>
+                )}
+
+                {/* STEP 3: CONTACT & ADDRESS */}
+                {signupStep === 3 && (
+                    <div className="space-y-4 animate-in slide-in-from-right-4 duration-300">
+                    <div className="space-y-2">
+                        <Label>Phone Number</Label>
+                        <SmartPhoneInput 
+                        value={formData.phone} 
+                        onChange={handlePhoneChange} 
+                        placeholder="76 123 4567" 
+                        />
+                    </div>
+
+                    <div className="space-y-2">
+                        <Label>Billing Address (Optional)</Label>
+                        <AddressAutocomplete 
+                            onAddressSelect={(addr) => setFormData({...formData, address: addr})}
+                            defaultValue={formData.address}
+                        />
+                        <p className="text-xs text-muted-foreground">Used for faster checkout if you choose delivery.</p>
+                    </div>
+                    </div>
+                )}
+
+                </CardContent>
+
+                <CardFooter className="flex justify-between">
+                {signupStep > 1 ? (
+                    <Button variant="outline" onClick={prevStep} disabled={loading}>
+                    <ArrowLeft className="mr-2 h-4 w-4" /> Back
+                    </Button>
+                ) : (
+                    <div /> /* Spacer */
+                )}
+
+                {signupStep < 3 ? (
+                    <Button onClick={nextStep} disabled={loading}>
+                        Next <ArrowRight className="ml-2 h-4 w-4" />
+                    </Button>
+                ) : (
+                    <Button onClick={handleFinalSignup} disabled={loading}>
+                        {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                        Create Account
+                    </Button>
+                )}
+                </CardFooter>
+            </TabsContent>
+            </Tabs>
+        )}
       </Card>
     </div>
   );
