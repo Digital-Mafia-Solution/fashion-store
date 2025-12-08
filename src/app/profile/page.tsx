@@ -11,7 +11,6 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { toast } from "sonner";
 import { Loader2, Upload, User as UserIcon } from "lucide-react";
 import { User } from "@supabase/supabase-js";
-import { SmartPhoneInput } from "@/components/ui/phone-input";
 
 interface ProfileData {
   first_name: string;
@@ -33,6 +32,9 @@ export default function ProfilePage() {
     avatar_url: null,
     email: ""
   });
+  
+  // FIX 1: Added missing state for password change
+  const [newPassword, setNewPassword] = useState("");
 
   useEffect(() => {
     async function loadProfile() {
@@ -43,7 +45,6 @@ export default function ProfilePage() {
       }
       setUser(user);
 
-      // FIX 1: Use maybeSingle() instead of single() to avoid PGRST116 error
       const { data, error } = await supabase
         .from("profiles")
         .select("*")
@@ -93,13 +94,12 @@ export default function ProfilePage() {
 
       setProfile(prev => ({ ...prev, avatar_url: publicUrl }));
       
-      // FIX 2: Use upsert instead of update to ensure row exists
       await supabase
         .from("profiles")
         .upsert({ 
             id: user.id,
             avatar_url: publicUrl,
-            email: user.email // Ensure required fields are present
+            email: user.email 
         });
 
       toast.success("Profile picture updated!");
@@ -116,13 +116,13 @@ export default function ProfilePage() {
     try {
       if (!user) throw new Error("No user logged in");
 
-      // FIX 3: Use upsert instead of update
       const { error } = await supabase
         .from("profiles")
         .upsert({
           id: user.id,
           first_name: profile.first_name,
           last_name: profile.last_name,
+          full_name: `${profile.first_name} ${profile.last_name}`,
           phone: profile.phone,
           email: user.email
         });
@@ -134,6 +134,28 @@ export default function ProfilePage() {
       toast.error("Failed to update profile");
     } finally {
       setSaving(false);
+    }
+  };
+
+  // FIX 2: Added missing handler for password change
+  const handlePasswordChange = async () => {
+    if (newPassword.length < 6) {
+        toast.error("Password must be at least 6 characters");
+        return;
+    }
+
+    setSaving(true);
+    try {
+        const { error } = await supabase.auth.updateUser({ password: newPassword });
+        if (error) throw error;
+        toast.success("Password updated successfully");
+        setNewPassword("");
+    } catch (error: unknown) {
+        let msg = "Failed to update password";
+        if (error instanceof Error) msg = error.message;
+        toast.error(msg);
+    } finally {
+        setSaving(false);
     }
   };
 
@@ -202,9 +224,10 @@ export default function ProfilePage() {
           </div>
           <div className="space-y-2">
             <Label>Phone Number</Label>
-            <SmartPhoneInput 
+            <Input 
                 value={profile.phone} 
-                onChange={val => setProfile({...profile, phone: val})} 
+                onChange={e => setProfile({...profile, phone: e.target.value})}
+                className="bg-background border-input"
             />
           </div>
         </CardContent>
@@ -215,6 +238,33 @@ export default function ProfilePage() {
           </Button>
         </CardFooter>
       </Card>
+
+      {/* Security Card for Password Change */}
+      <Card className="bg-card text-card-foreground border-border mt-8">
+        <CardHeader>
+            <CardTitle>Security</CardTitle>
+            <CardDescription>Manage your password.</CardDescription>
+        </CardHeader>
+        <CardContent>
+            <div className="flex gap-4 items-end">
+            <div className="grid w-full items-center gap-1.5">
+                <Label htmlFor="password">New Password</Label>
+                <Input 
+                    type="password" 
+                    id="password" 
+                    placeholder="******" 
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)} 
+                    className="bg-background border-input"
+                />
+            </div>
+            <Button onClick={handlePasswordChange} disabled={saving || !newPassword}>
+                {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Update
+            </Button>
+            </div>
+        </CardContent>
+     </Card>
     </div>
   );
 }
