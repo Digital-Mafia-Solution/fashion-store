@@ -18,7 +18,7 @@ import { supabase } from "@/lib/supabase";
 import { toast } from "sonner";
 import { User as SupabaseUser } from "@supabase/supabase-js";
 import { useCart } from "@/context/CartContext";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -32,13 +32,14 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 export default function Navigation() {
   const [user, setUser] = useState<SupabaseUser | null>(null);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [mounted, setMounted] = useState(false);
+  const [isResetMode, setIsResetMode] = useState(false);
   const { cartCount } = useCart();
 
   const searchParams = useSearchParams();
   const router = useRouter();
+  const pathname = usePathname();
 
-  // Handle Search Submit (Only on Enter)
-  // We now retrieve the value directly from the form event, removing the need for state
   const handleSearchSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
@@ -53,7 +54,40 @@ export default function Navigation() {
     router.push(`/?${params.toString()}`);
   };
 
-  // Auth Listener
+  // FIX 1: Wrap setMounted in setTimeout to avoid synchronous render warning
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setMounted(true);
+    }, 0);
+    return () => clearTimeout(timer);
+  }, []);
+
+  // FIX 2: Check for reset requirement asynchronously
+  useEffect(() => {
+    const checkResetStatus = () => {
+      // 1. Check URL flag from callback
+      if (searchParams.get("reset_required") === "true") {
+        sessionStorage.setItem("dmf_reset_lock", "true");
+        setIsResetMode(true);
+      }
+
+      // 2. Check Session Storage (Persist across reloads)
+      const isLocked = sessionStorage.getItem("dmf_reset_lock") === "true";
+      if (isLocked) {
+        setIsResetMode(true);
+        // 3. Enforce Lock: If locked and not on update-password, redirect back
+        if (pathname !== "/update-password") {
+          router.replace("/update-password");
+        }
+      } else {
+        setIsResetMode(false);
+      }
+    };
+
+    const timer = setTimeout(checkResetStatus, 0);
+    return () => clearTimeout(timer);
+  }, [searchParams, pathname, router]);
+
   useEffect(() => {
     const fetchProfile = async (userId: string) => {
       const { data } = await supabase
@@ -72,13 +106,20 @@ export default function Navigation() {
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
+    } = supabase.auth.onAuthStateChange((event, session) => {
       setUser(session?.user ?? null);
+
+      if (event === "PASSWORD_RECOVERY") {
+        sessionStorage.setItem("dmf_reset_lock", "true");
+        setIsResetMode(true);
+        router.replace("/update-password");
+      }
+
       if (session?.user) {
         fetchProfile(session.user.id);
       } else {
         setAvatarUrl(null);
-        if (_event === "SIGNED_OUT") {
+        if (event === "SIGNED_OUT") {
           router.replace("/login");
           router.refresh();
         }
@@ -90,17 +131,42 @@ export default function Navigation() {
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
+    sessionStorage.removeItem("dmf_reset_lock");
+    setIsResetMode(false);
     toast.success("Logged out successfully");
     router.push("/");
     router.refresh();
   };
+
+  // Minimal Header for Reset Mode
+  if (isResetMode) {
+    return (
+      <header className="sticky top-0 z-50 w-full border-b border-border bg-background/95 backdrop-blur text-foreground">
+        <div className="container mx-auto px-4 h-16 flex items-center justify-between">
+          <Link
+            href="#"
+            className="font-bold text-xl flex items-center gap-2 shrink-0 group"
+          >
+            <div className="w-8 h-8 rounded-md bg-primary flex items-center justify-center text-primary-foreground shadow-sm">
+              DM
+            </div>
+            <span className="hidden sm:inline-block tracking-tight text-foreground">
+              Fashion Market
+            </span>
+          </Link>
+          <Button variant="ghost" onClick={handleLogout}>
+            Sign Out
+          </Button>
+        </div>
+      </header>
+    );
+  }
 
   return (
     <>
       {/* --- TOP NAVIGATION (Desktop & Mobile Header) --- */}
       <header className="sticky top-0 z-50 w-full border-b border-border bg-background/95 backdrop-blur text-foreground supports-backdrop-filter:bg-background/60">
         <div className="container mx-auto px-4 h-16 flex items-center justify-between gap-4">
-          {/* Brand */}
           <Link
             href="/"
             className="font-bold text-xl flex items-center gap-2 shrink-0 group"
@@ -113,7 +179,6 @@ export default function Navigation() {
             </span>
           </Link>
 
-          {/* Search Bar (Centered) */}
           <form
             onSubmit={handleSearchSubmit}
             className="flex-1 max-w-md relative mx-2"
@@ -123,17 +188,14 @@ export default function Navigation() {
               name="q"
               placeholder="Search drops..."
               className="pl-10 w-full bg-muted/50 border-input text-foreground placeholder:text-muted-foreground focus-visible:bg-background focus-visible:ring-primary/20 transition-all h-10"
-              // Key ensures the input re-renders (and updates defaultValue) if the URL param changes externally (e.g. Back button)
               key={searchParams.get("q")}
               defaultValue={searchParams.get("q") || ""}
             />
           </form>
 
-          {/* Desktop Actions */}
           <div className="flex items-center gap-2">
             <ThemeToggle />
 
-            {/* Desktop Cart */}
             <Button
               variant="ghost"
               size="icon"
@@ -142,7 +204,7 @@ export default function Navigation() {
             >
               <Link href="/cart">
                 <ShoppingBag className="h-5 w-5" />
-                {cartCount > 0 && (
+                {mounted && cartCount > 0 && (
                   <span className="absolute -top-1 -right-1 h-4 w-4 rounded-full bg-primary text-[10px] flex items-center justify-center text-primary-foreground font-bold">
                     {cartCount}
                   </span>
@@ -150,7 +212,6 @@ export default function Navigation() {
               </Link>
             </Button>
 
-            {/* Desktop User Menu */}
             <div className="hidden md:flex ml-2">
               {user ? (
                 <DropdownMenu>
@@ -213,7 +274,7 @@ export default function Navigation() {
           >
             <div className="relative">
               <ShoppingBag className="h-5 w-5" />
-              {cartCount > 0 && (
+              {mounted && cartCount > 0 && (
                 <span className="absolute -top-1 -right-2 h-3.5 w-3.5 rounded-full bg-primary text-[9px] flex items-center justify-center text-primary-foreground font-bold">
                   {cartCount}
                 </span>
@@ -250,6 +311,7 @@ export default function Navigation() {
           )}
         </div>
       </nav>
+      <div className="md:hidden h-16" />
     </>
   );
 }

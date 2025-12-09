@@ -6,7 +6,14 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+  CardFooter,
+} from "@/components/ui/card";
 import { toast } from "sonner";
 import { Loader2, LockKeyhole } from "lucide-react";
 
@@ -19,7 +26,9 @@ export default function UpdatePasswordPage() {
 
   useEffect(() => {
     const checkSession = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
       if (!session) {
         toast.error("Invalid or expired reset link. Please try again.");
         router.replace("/login");
@@ -44,10 +53,14 @@ export default function UpdatePasswordPage() {
       const { error } = await supabase.auth.updateUser({ password });
       if (error) throw error;
 
+      // FIX: Clear the reset lock on success
+      sessionStorage.removeItem("dmf_reset_lock");
+
       toast.success("Password updated successfully!");
       router.replace("/");
-    } catch (error: unknown) { // FIX: Changed 'any' to 'unknown'
-      const message = error instanceof Error ? error.message : "Failed to update password";
+    } catch (error: unknown) {
+      const message =
+        error instanceof Error ? error.message : "Failed to update password";
       toast.error(message);
     } finally {
       setLoading(false);
@@ -77,27 +90,31 @@ export default function UpdatePasswordPage() {
         <CardContent className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="password">New Password</Label>
-            <Input 
-              id="password" 
-              type="password" 
-              placeholder="******" 
+            <Input
+              id="password"
+              type="password"
+              placeholder="******"
               value={password}
-              onChange={(e) => setPassword(e.target.value)} 
+              onChange={(e) => setPassword(e.target.value)}
             />
           </div>
           <div className="space-y-2">
             <Label htmlFor="confirmPassword">Confirm Password</Label>
-            <Input 
-              id="confirmPassword" 
-              type="password" 
-              placeholder="******" 
+            <Input
+              id="confirmPassword"
+              type="password"
+              placeholder="******"
               value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)} 
+              onChange={(e) => setConfirmPassword(e.target.value)}
             />
           </div>
         </CardContent>
         <CardFooter>
-          <Button className="w-full" onClick={handleUpdatePassword} disabled={loading || !password}>
+          <Button
+            className="w-full"
+            onClick={handleUpdatePassword}
+            disabled={loading || !password}
+          >
             {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
             Update Password
           </Button>
