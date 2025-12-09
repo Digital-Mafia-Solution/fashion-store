@@ -21,7 +21,7 @@ import { supabase } from "@/lib/supabase";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 import { MockPaymentDialog } from "@/components/MockPaymentDialog";
-import AddressAutocomplete from "@/components/AddressAutocomplete"; // <--- New Import
+import AddressAutocomplete from "@/components/AddressAutocomplete";
 import { z } from "zod";
 
 interface Warehouse {
@@ -30,7 +30,6 @@ interface Warehouse {
   address: string | null;
 }
 
-// Validation Schema
 const checkoutSchema = z.object({
   address: z.string().min(10, "Please select a valid address from the list"),
 });
@@ -46,11 +45,10 @@ export default function CartPage() {
   const [address, setAddress] = useState("");
   const [showPayment, setShowPayment] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(""); // Track validation error
+  const [error, setError] = useState("");
 
   const router = useRouter();
 
-  // Load Warehouses
   useEffect(() => {
     supabase
       .from("locations")
@@ -66,7 +64,7 @@ export default function CartPage() {
   const finalTotal = cartTotal + deliveryFee;
 
   const handleInitiateCheckout = async () => {
-    setError(""); // Clear errors
+    setError("");
 
     const {
       data: { user },
@@ -82,7 +80,6 @@ export default function CartPage() {
       return;
     }
 
-    // Validate Courier Address
     if (fulfillment === "courier") {
       const validation = checkoutSchema.safeParse({ address });
       if (!validation.success) {
@@ -106,7 +103,6 @@ export default function CartPage() {
       } = await supabase.auth.getUser();
       if (!user) throw new Error("User not found");
 
-      // 1. Create Order
       const { data: order, error: orderError } = await supabase
         .from("orders")
         .insert({
@@ -123,7 +119,6 @@ export default function CartPage() {
 
       if (orderError) throw orderError;
 
-      // 2. Create Items
       const itemsData = cart.map((item) => ({
         order_id: order.id,
         product_id: item.id,
@@ -157,7 +152,7 @@ export default function CartPage() {
 
   if (cart.length === 0) {
     return (
-      <div className="container mx-auto px-4 py-4 md:py-20 text-center">
+      <div className="container mx-auto px-4 py-20 text-center">
         <div className="w-16 h-16 bg-muted rounded-full flex items-center justify-center mx-auto mb-4">
           <Store className="w-8 h-8 text-muted-foreground" />
         </div>
@@ -177,9 +172,13 @@ export default function CartPage() {
         {/* LEFT: Items List */}
         <div className="lg:col-span-2 space-y-6">
           {cart.map((item) => (
-            <Card key={item.id} className="overflow-hidden">
+            <Card key={`${item.id}-${item.size}`} className="overflow-hidden">
               <CardContent className="p-4 flex gap-4 items-center">
-                <div className="relative w-24 h-24 bg-muted rounded-md overflow-hidden shrink-0">
+                {/* FIX: Clickable Image */}
+                <Link
+                  href={`/product/${item.id}`}
+                  className="relative w-24 h-24 bg-muted rounded-md overflow-hidden shrink-0 cursor-pointer hover:opacity-90 transition-opacity"
+                >
                   {item.image_url ? (
                     <Image
                       src={item.image_url}
@@ -192,10 +191,28 @@ export default function CartPage() {
                       No Img
                     </div>
                   )}
-                </div>
+                </Link>
+
                 <div className="flex-1">
                   <div className="flex justify-between items-start">
-                    <h3 className="font-semibold text-lg">{item.name}</h3>
+                    {/* FIX: Clickable Name & Size Display */}
+                    <div>
+                      <Link
+                        href={`/product/${item.id}`}
+                        className="font-semibold text-lg hover:text-primary transition-colors cursor-pointer"
+                      >
+                        {item.name}
+                      </Link>
+                      {item.size && (
+                        <p className="text-sm text-muted-foreground mt-1">
+                          Size:{" "}
+                          <span className="font-medium text-foreground">
+                            {item.size}
+                          </span>
+                        </p>
+                      )}
+                    </div>
+
                     <p className="font-bold">R {item.price}</p>
                   </div>
                   <div className="flex items-center gap-4 mt-4">
@@ -204,7 +221,7 @@ export default function CartPage() {
                         variant="ghost"
                         size="icon"
                         className="h-8 w-8"
-                        onClick={() => updateQuantity(item.id, -1)}
+                        onClick={() => updateQuantity(item.id, -1, item.size)}
                       >
                         <Minus className="w-3 h-3" />
                       </Button>
@@ -215,7 +232,7 @@ export default function CartPage() {
                         variant="ghost"
                         size="icon"
                         className="h-8 w-8"
-                        onClick={() => updateQuantity(item.id, 1)}
+                        onClick={() => updateQuantity(item.id, 1, item.size)}
                       >
                         <Plus className="w-3 h-3" />
                       </Button>
@@ -224,7 +241,7 @@ export default function CartPage() {
                       variant="ghost"
                       size="sm"
                       className="text-destructive"
-                      onClick={() => removeFromCart(item.id)}
+                      onClick={() => removeFromCart(item.id, item.size)}
                     >
                       <Trash2 className="w-4 h-4 mr-2" /> Remove
                     </Button>
@@ -235,7 +252,7 @@ export default function CartPage() {
           ))}
         </div>
 
-        {/* RIGHT: Checkout */}
+        {/* RIGHT: Checkout (Unchanged) */}
         <div className="space-y-6">
           <Card>
             <CardHeader>
@@ -297,7 +314,6 @@ export default function CartPage() {
 
               {fulfillment === "courier" && (
                 <div className="space-y-2 animate-in slide-in-from-top-2 relative">
-                  {/* FIX: Use the Google Autocomplete Component */}
                   <AddressAutocomplete
                     onAddressSelect={(addr) => setAddress(addr)}
                     defaultValue={address}

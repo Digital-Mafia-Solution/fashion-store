@@ -169,33 +169,36 @@ export type Database = {
       }
       products: {
         Row: {
-          category: string | null
+          category: string[] | null
           created_at: string | null
           description: string | null
           id: string
           image_url: string | null
           name: string
           price: number
+          sizes: string[] | null
           sku: string
         }
         Insert: {
-          category?: string | null
+          category?: string[] | null
           created_at?: string | null
           description?: string | null
           id?: string
           image_url?: string | null
           name: string
           price: number
+          sizes?: string[] | null
           sku: string
         }
         Update: {
-          category?: string | null
+          category?: string[] | null
           created_at?: string | null
           description?: string | null
           id?: string
           image_url?: string | null
           name?: string
           price?: number
+          sizes?: string[] | null
           sku?: string
         }
         Relationships: []
@@ -211,6 +214,7 @@ export type Database = {
           full_name: string | null
           id: string
           last_name: string | null
+          must_change_password: boolean | null
           phone: string | null
           role: Database["public"]["Enums"]["user_role"] | null
         }
@@ -224,6 +228,7 @@ export type Database = {
           full_name?: string | null
           id: string
           last_name?: string | null
+          must_change_password?: boolean | null
           phone?: string | null
           role?: Database["public"]["Enums"]["user_role"] | null
         }
@@ -237,16 +242,26 @@ export type Database = {
           full_name?: string | null
           id?: string
           last_name?: string | null
+          must_change_password?: boolean | null
           phone?: string | null
           role?: Database["public"]["Enums"]["user_role"] | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "profiles_assigned_location_id_fkey"
+            columns: ["assigned_location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
+            referencedColumns: ["id"]
+          },
+        ]
       }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
+      is_staff: { Args: never; Returns: boolean }
       process_sale: {
         Args: {
           p_location_id: string

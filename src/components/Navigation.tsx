@@ -311,7 +311,6 @@ export default function Navigation() {
           )}
         </div>
       </nav>
-      <div className="md:hidden h-16" />
     </>
   );
 }

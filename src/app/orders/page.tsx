@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import {
   Card,
   CardContent,
@@ -20,6 +21,7 @@ interface OrderItem {
   quantity: number;
   price_at_purchase: number;
   products: {
+    id: string;
     name: string;
     image_url: string | null;
   } | null;
@@ -62,7 +64,7 @@ export default function CustomerOrdersPage() {
           order_items (
             quantity,
             price_at_purchase,
-            products (name, image_url)
+            products (id, name, image_url)
           )
         `
         )
@@ -158,7 +160,10 @@ export default function CustomerOrdersPage() {
                 <div className="space-y-4">
                   {order.order_items.map((item, index) => (
                     <div key={index} className="flex items-center gap-4">
-                      <div className="relative w-16 h-16 bg-muted rounded overflow-hidden shrink-0">
+                      <Link
+                        href={`/product/${item.products?.id}`}
+                        className="relative w-16 h-16 bg-muted rounded overflow-hidden shrink-0"
+                      >
                         {item.products?.image_url && (
                           <Image
                             src={item.products.image_url}
@@ -167,7 +172,7 @@ export default function CustomerOrdersPage() {
                             className="object-cover"
                           />
                         )}
-                      </div>
+                      </Link>
                       <div className="flex-1">
                         <h4 className="font-medium line-clamp-1">
                           {item.products?.name}

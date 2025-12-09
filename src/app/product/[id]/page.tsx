@@ -2,10 +2,9 @@ import { supabase } from "@/lib/supabase";
 import { notFound } from "next/navigation";
 import Image from "next/image";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import Link from "next/link";
-import { ArrowLeft, MapPin, Truck } from "lucide-react";
-import AddToCartButton from "@/components/AddToCartButton";
+import { ArrowLeft, MapPin } from "lucide-react";
+import { ProductActions } from "./components/ProductActions";
 
 export const revalidate = 0;
 
@@ -18,7 +17,8 @@ export default async function ProductPage({ params }: ProductPageProps) {
 
   const { data: product, error } = await supabase
     .from("products")
-    .select(`
+    .select(
+      `
       *,
       inventory (
         quantity,
@@ -28,7 +28,8 @@ export default async function ProductPage({ params }: ProductPageProps) {
           type
         )
       )
-    `)
+    `
+    )
     .eq("id", id)
     .single();
 
@@ -36,21 +37,26 @@ export default async function ProductPage({ params }: ProductPageProps) {
     return notFound();
   }
 
-  // FIX 1: Filter stock calculation to only include STORES
-  const totalStock = product.inventory?.reduce((sum, item) => {
-    const isStore = item.locations?.type === 'store';
-    return isStore ? sum + (item.quantity ?? 0) : sum;
-  }, 0) || 0;
+  const totalStock =
+    product.inventory?.reduce((sum, item) => {
+      const isStore = item.locations?.type === "store";
+      return isStore ? sum + (item.quantity ?? 0) : sum;
+    }, 0) || 0;
 
-  // FIX 2: Filter the list of locations to display
   const availableLocations = product.inventory?.filter(
-    inv => inv.locations?.type === 'store' && (inv.quantity ?? 0) > 0
+    (inv) => inv.locations?.type === "store" && (inv.quantity ?? 0) > 0
   );
+
+  // FIX: Use array directly
+  const categories =
+    product.category && product.category.length > 0
+      ? product.category
+      : ["Unisex"];
 
   return (
     <div className="container mx-auto px-6 py-12">
-      <Link 
-        href="/" 
+      <Link
+        href="/"
         className="inline-flex items-center text-sm text-muted-foreground hover:text-primary mb-6"
       >
         <ArrowLeft className="w-4 h-4 mr-2" />
@@ -76,20 +82,29 @@ export default async function ProductPage({ params }: ProductPageProps) {
 
         <div>
           <div className="flex justify-between items-start">
-            <div>
-              <p className="text-sm font-semibold text-primary uppercase tracking-wide">
-                {product.category}
-              </p>
-              <h1 className="text-4xl font-extrabold mt-2 tracking-tight">
+            <div className="flex flex-col gap-2">
+              <div className="flex flex-wrap gap-2">
+                {categories.map((cat, i) => (
+                  <span
+                    key={i}
+                    className="text-xs font-semibold text-primary uppercase tracking-wide bg-primary/10 px-2 py-1 rounded"
+                  >
+                    {cat}
+                  </span>
+                ))}
+              </div>
+              <h1 className="text-4xl font-extrabold mt-1 tracking-tight">
                 {product.name}
               </h1>
             </div>
-            <div className="text-3xl font-bold">R {product.price}</div>
+            <div className="text-3xl font-bold whitespace-nowrap">
+              R {product.price}
+            </div>
           </div>
 
           <div className="mt-6 flex items-center gap-3">
-            <Badge 
-              variant={totalStock > 0 ? "secondary" : "destructive"} 
+            <Badge
+              variant={totalStock > 0 ? "secondary" : "destructive"}
               className="text-sm px-3 py-1"
             >
               {totalStock > 0 ? "In Stock" : "Sold Out"}
@@ -104,18 +119,24 @@ export default async function ProductPage({ params }: ProductPageProps) {
           </p>
 
           <div className="mt-8 border-t pt-8">
+            <ProductActions product={product} totalStock={totalStock} />
+          </div>
+
+          <div className="mt-8 border-t pt-8">
             <h3 className="font-semibold mb-4 flex items-center gap-2">
               <MapPin className="w-4 h-4" />
               Availability by Store
             </h3>
-            
+
             <div className="space-y-3">
               {availableLocations?.length === 0 ? (
-                <p className="text-sm text-muted-foreground italic">No stock available in stores.</p>
+                <p className="text-sm text-muted-foreground italic">
+                  No stock available in stores.
+                </p>
               ) : (
                 availableLocations?.map((inv) => (
-                  <div 
-                    key={inv.locations?.id} 
+                  <div
+                    key={inv.locations?.id}
                     className="flex justify-between items-center p-3 rounded-lg border bg-card/50"
                   >
                     <div className="flex items-center gap-3">
@@ -131,14 +152,6 @@ export default async function ProductPage({ params }: ProductPageProps) {
                 ))
               )}
             </div>
-          </div>
-
-          <div className="mt-10 flex gap-4">
-            <AddToCartButton product={product} disabled={totalStock === 0} />
-
-            <Button size="lg" variant="outline" className="h-14 w-14 p-0 shrink-0">
-              <Truck className="w-6 h-6" />
-            </Button>
           </div>
         </div>
       </div>

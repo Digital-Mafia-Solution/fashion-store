@@ -1,7 +1,11 @@
 import { supabase } from "@/lib/supabase";
 import Link from "next/link";
 import Image from "next/image";
-import AddToCartButton from "@/components/AddToCartButton";
+import { Button } from "@/components/ui/button";
+import { ArrowRight } from "lucide-react";
+import { ProductCard } from "@/components/ProductCard";
+import { MobileCarousel } from "@/components/MobileCarousel";
+import { CarouselItem } from "@/components/ui/carousel";
 
 export const revalidate = 0;
 
@@ -12,112 +16,172 @@ interface Props {
 export default async function Index({ searchParams }: Props) {
   const { q } = await searchParams;
 
-  // FIX: Select inventory and nested location data to satisfy TypeScript and logic requirements
-  let query = supabase.from("products").select(`
-    *,
-    inventory (
-      quantity,
-      locations (
-        type
-      )
-    )
-  `);
-
   if (q && typeof q === "string") {
-    // Search in both name and category
-    query = query.or(`name.ilike.%${q}%,category.ilike.%${q}%`);
+    let query = supabase.from("products").select(`
+      *,
+      inventory ( quantity, locations ( type ) )
+    `);
+
+    // FIX: Updated search logic for Arrays.
+    // Checks if name contains 'q' OR if category array contains the tag 'q'
+    query = query.or(`name.ilike.%${q}%,category.cs.{${q}}`);
+
+    const { data: products } = await query;
+
+    return (
+      <div className="container mx-auto px-4 py-4 md:py-12 mb-20">
+        <div className="mb-8">
+          <h1 className="text-2xl md:text-4xl font-extrabold tracking-tight">
+            Results for &quot;{q}&quot;
+          </h1>
+          <p className="text-muted-foreground mt-2 text-sm md:text-base">
+            Found {products?.length || 0} items matching your search.
+          </p>
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 md:gap-8">
+          {products?.map((product) => (
+            <ProductCard key={product.id} product={product} />
+          ))}
+        </div>
+      </div>
+    );
   }
 
-  const { data: products } = await query;
+  // --- HOME VIEW ---
 
-  return (
-    <div className="container mx-auto px-4 py-4 md:py-12 mb-20">
-      <div className="flex justify-between items-end mb-8">
+  const { data: latestProducts } = await supabase
+    .from("products")
+    .select(`*, inventory ( quantity, locations ( type ) )`)
+    .order("created_at", { ascending: false })
+    .limit(6);
+
+  const { data: popularProducts } = await supabase
+    .from("products")
+    .select(`*, inventory ( quantity, locations ( type ) )`)
+    .order("price", { ascending: false })
+    .limit(6);
+
+  const { data: allProducts } = await supabase
+    .from("products")
+    .select("category, image_url");
+
+  // FIX: Updated Category Logic for Arrays
+  const categoryMap = new Map<string, string>();
+  allProducts?.forEach((p) => {
+    if (p.category && Array.isArray(p.category)) {
+      p.category.forEach((c) => {
+        if (!categoryMap.has(c)) {
+          categoryMap.set(c, p.image_url || "");
+        }
+      });
+    }
+  });
+  const categories = Array.from(categoryMap.entries()).map(([name, image]) => ({
+    name,
+    image,
+  }));
+
+  const renderSection = (
+    title: string,
+    subtitle: string,
+    link: string,
+    content: React.ReactNode,
+    mobileContent: React.ReactNode
+  ) => (
+    <section>
+      <div className="flex justify-between items-end mb-4 md:mb-6">
         <div>
-          <h1 className="text-4xl font-extrabold tracking-tight">
-            {q ? `Results for "${q}"` : "Latest Drops"}
-          </h1>
-          <p className="text-muted-foreground mt-2">
-            {q
-              ? "Found the following items matching your search."
-              : "Fresh local fashion, available now."}
-          </p>
+          <h2 className="text-2xl md:text-3xl font-bold tracking-tight">
+            {title}
+          </h2>
+          <p className="text-muted-foreground text-sm mt-1">{subtitle}</p>
+        </div>
+        <Button variant="ghost" className="hidden lg:flex" asChild>
+          <Link href={link}>
+            View All <ArrowRight className="ml-2 h-4 w-4" />
+          </Link>
+        </Button>
+      </div>
+
+      <div className="lg:hidden">
+        <MobileCarousel>{mobileContent}</MobileCarousel>
+        <div className="mt-4">
+          <Button variant="outline" className="w-full" asChild>
+            <Link href={link}>View All {title}</Link>
+          </Button>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
-        {products?.map((product) => {
-          // FIX: Calculate stock level from the fetched inventory array
-          const stockLevel =
-            product.inventory?.reduce(
-              (sum, item) => sum + (item.quantity || 0),
-              0
-            ) ?? 0;
-          const isSoldOut = stockLevel === 0;
+      <div className="hidden lg:grid lg:grid-cols-6 gap-8">{content}</div>
+    </section>
+  );
 
-          return (
-            <div
-              key={product.id}
-              className="group relative flex flex-col gap-2"
-            >
-              <Link
-                href={`/product/${product.id}`}
-                className="absolute inset-0 z-10"
-              >
-                <span className="sr-only">View {product.name}</span>
-              </Link>
+  return (
+    <div className="container mx-auto px-4 py-4 md:py-12 mb-20 space-y-12 md:space-y-16">
+      {renderSection(
+        "Latest Drops",
+        "Fresh local fashion, just landed.",
+        "/products/latest",
+        latestProducts?.map((p) => <ProductCard key={p.id} product={p} />),
+        latestProducts?.map((p) => (
+          <CarouselItem key={p.id} className="basis-1/2 md:basis-1/3 pl-4">
+            <ProductCard product={p} />
+          </CarouselItem>
+        ))
+      )}
 
-              <div className="aspect-square relative overflow-hidden rounded-lg bg-gray-100 shadow-sm transition-all duration-300 group-hover:shadow-md">
-                {product.image_url ? (
-                  <Image
-                    src={product.image_url}
-                    alt={product.name}
-                    fill
-                    className="object-cover transition-transform duration-500 group-hover:scale-105"
-                    sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 25vw"
-                  />
-                ) : (
-                  <div className="w-full h-full flex items-center justify-center text-muted-foreground">
-                    No Image
-                  </div>
-                )}
+      {renderSection(
+        "Popular",
+        "Top rated styles this week.",
+        "/products/popular",
+        popularProducts?.map((p) => <ProductCard key={p.id} product={p} />),
+        popularProducts?.map((p) => (
+          <CarouselItem key={p.id} className="basis-1/2 md:basis-1/3 pl-4">
+            <ProductCard product={p} />
+          </CarouselItem>
+        ))
+      )}
 
-                {/* FIX: Use calculated stock status */}
-                {isSoldOut && (
-                  <div className="absolute top-2 right-2 bg-destructive text-destructive-foreground text-xs font-bold px-2 py-1 rounded">
-                    SOLD OUT
-                  </div>
-                )}
-              </div>
-
-              <div className="flex justify-between items-start mt-1">
-                <div>
-                  <h3 className="font-semibold text-lg leading-none tracking-tight group-hover:text-primary transition-colors">
-                    {product.name}
-                  </h3>
-                  <p className="text-sm text-muted-foreground mt-1">
-                    {product.category || "Unisex"}
-                  </p>
-                </div>
-                <div className="font-bold text-lg">
-                  R {product.price?.toFixed(2)}
-                </div>
-              </div>
-
-              <div className="z-20 mt-1">
-                {/* FIX: Passed product (which now includes inventory) and disabled state based on calculation */}
-                <AddToCartButton product={product} disabled={isSoldOut} />
-              </div>
-            </div>
-          );
-        })}
-
-        {products?.length === 0 && (
-          <div className="col-span-full text-center py-20 text-muted-foreground">
-            No products found. Try a different search term.
-          </div>
-        )}
-      </div>
+      {renderSection(
+        "Categories",
+        "Browse by collection.",
+        "/categories",
+        categories.map((cat) => (
+          <CategoryCard key={cat.name} name={cat.name} image={cat.image} />
+        )),
+        categories.map((cat) => (
+          <CarouselItem key={cat.name} className="basis-1/2 md:basis-1/3 pl-4">
+            <CategoryCard name={cat.name} image={cat.image} />
+          </CarouselItem>
+        ))
+      )}
     </div>
+  );
+}
+
+function CategoryCard({ name, image }: { name: string; image: string }) {
+  return (
+    <Link
+      href={`/?q=${name}`}
+      className="group relative aspect-square overflow-hidden rounded-lg bg-gray-100 block h-full w-full"
+    >
+      {image ? (
+        <Image
+          src={image}
+          alt={name}
+          fill
+          className="object-cover transition-transform duration-500 group-hover:scale-105 opacity-80 group-hover:opacity-100"
+          sizes="(max-width: 768px) 50vw, 16vw"
+        />
+      ) : (
+        <div className="w-full h-full flex items-center justify-center bg-muted" />
+      )}
+      <div className="absolute inset-0 bg-black/20 group-hover:bg-black/10 transition-colors" />
+      <div className="absolute bottom-4 left-4 right-4">
+        <span className="inline-block px-3 py-1 bg-background/90 backdrop-blur rounded-full text-xs font-bold shadow-sm">
+          {name}
+        </span>
+      </div>
+    </Link>
   );
 }
