@@ -24,13 +24,14 @@ export default async function Index({ searchParams }: Props) {
   `);
 
   if (q && typeof q === "string") {
-    query = query.ilike("name", `%${q}%`);
+    // Search in both name and category
+    query = query.or(`name.ilike.%${q}%,category.ilike.%${q}%`);
   }
 
   const { data: products } = await query;
 
   return (
-    <div className="container mx-auto px-4 py-12 mb-20">
+    <div className="container mx-auto px-4 py-4 md:py-12 mb-20">
       <div className="flex justify-between items-end mb-8">
         <div>
           <h1 className="text-4xl font-extrabold tracking-tight">
@@ -47,12 +48,22 @@ export default async function Index({ searchParams }: Props) {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
         {products?.map((product) => {
           // FIX: Calculate stock level from the fetched inventory array
-          const stockLevel = product.inventory?.reduce((sum, item) => sum + (item.quantity || 0), 0) ?? 0;
+          const stockLevel =
+            product.inventory?.reduce(
+              (sum, item) => sum + (item.quantity || 0),
+              0
+            ) ?? 0;
           const isSoldOut = stockLevel === 0;
 
           return (
-            <div key={product.id} className="group relative flex flex-col gap-2">
-              <Link href={`/product/${product.id}`} className="absolute inset-0 z-10">
+            <div
+              key={product.id}
+              className="group relative flex flex-col gap-2"
+            >
+              <Link
+                href={`/product/${product.id}`}
+                className="absolute inset-0 z-10"
+              >
                 <span className="sr-only">View {product.name}</span>
               </Link>
 
@@ -70,7 +81,7 @@ export default async function Index({ searchParams }: Props) {
                     No Image
                   </div>
                 )}
-                
+
                 {/* FIX: Use calculated stock status */}
                 {isSoldOut && (
                   <div className="absolute top-2 right-2 bg-destructive text-destructive-foreground text-xs font-bold px-2 py-1 rounded">
@@ -78,7 +89,7 @@ export default async function Index({ searchParams }: Props) {
                   </div>
                 )}
               </div>
-              
+
               <div className="flex justify-between items-start mt-1">
                 <div>
                   <h3 className="font-semibold text-lg leading-none tracking-tight group-hover:text-primary transition-colors">
@@ -100,7 +111,7 @@ export default async function Index({ searchParams }: Props) {
             </div>
           );
         })}
-        
+
         {products?.length === 0 && (
           <div className="col-span-full text-center py-20 text-muted-foreground">
             No products found. Try a different search term.
