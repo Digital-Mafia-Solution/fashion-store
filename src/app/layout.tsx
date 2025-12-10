@@ -8,16 +8,16 @@ import { Toaster } from "@/components/ui/sonner";
 import CookieConsent from "@/components/CookieConsent";
 import Analytics from "@/components/Analytics";
 import { Suspense } from "react";
+import ThemeSync from "./theme-sync";
 import Script from "next/script";
 
 export const metadata: Metadata = {
   title: "Splaza Online Store",
   description: "Get local, online.",
-  manifest: "/manifest.webmanifest",
 };
 
 export const viewport: Viewport = {
-  themeColor: "#000000",
+  themeColor: undefined,
   width: "device-width",
   initialScale: 1,
   maximumScale: 1,
@@ -31,7 +31,11 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" suppressHydrationWarning>
+      <head>
+        <link rel="manifest" href="/manifest.webmanifest" />
+      </head>
       <body suppressHydrationWarning>
+        <ThemeSync />
         <ThemeProvider
           attribute="class"
           defaultTheme="system"
