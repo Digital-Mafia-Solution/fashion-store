@@ -15,7 +15,11 @@ interface AddressAutocompleteProps {
   error?: string;
 }
 
-export default function AddressAutocomplete({ onAddressSelect, defaultValue = "", error }: AddressAutocompleteProps) {
+export default function AddressAutocomplete({
+  onAddressSelect,
+  defaultValue = "",
+  error,
+}: AddressAutocompleteProps) {
   const {
     ready,
     value,
@@ -68,10 +72,14 @@ export default function AddressAutocomplete({ onAddressSelect, defaultValue = ""
         />
         {/* Status Icon */}
         <div className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
-             {!ready ? <Loader2 className="h-4 w-4 animate-spin" /> : <MapPin className="h-4 w-4" />}
+          {!ready ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <MapPin className="h-4 w-4" />
+          )}
         </div>
       </div>
-      
+
       {error && <span className="text-xs text-red-500">{error}</span>}
 
       {/* Suggestions Dropdown */}

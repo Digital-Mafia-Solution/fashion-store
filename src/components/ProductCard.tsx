@@ -1,6 +1,6 @@
 import Link from "next/link";
 import Image from "next/image";
-import AddToCartButton from "@/components/AddToCartButton";
+import { Button } from "@/components/ui/button";
 import { Tables } from "@/lib/database.types";
 
 type ProductWithInventory = Tables<"products"> & {
@@ -73,13 +73,16 @@ export function ProductCard({ product }: ProductCardProps) {
       </div>
 
       <div className="z-20 mt-auto pt-2">
-        <AddToCartButton
-          product={{
-            ...product,
-            inventory: product.inventory ?? [],
-          }}
+        <Button
+          asChild
+          className="w-full"
+          variant={isSoldOut ? "outline" : "default"}
           disabled={isSoldOut}
-        />
+        >
+          <Link href={`/product/${product.id}`}>
+            {isSoldOut ? "Sold Out" : "Select Size"}
+          </Link>
+        </Button>
       </div>
     </div>
   );
