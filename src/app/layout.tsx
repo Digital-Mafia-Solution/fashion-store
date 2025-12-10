@@ -11,8 +11,8 @@ import { Suspense } from "react";
 import Script from "next/script";
 
 export const metadata: Metadata = {
-  title: "Fashion Store",
-  description: "Local fashion, online.",
+  title: "Splaza Online Store",
+  description: "Get local, online.",
   manifest: "/manifest.webmanifest",
 };
 

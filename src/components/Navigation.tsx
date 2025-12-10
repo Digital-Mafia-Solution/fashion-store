@@ -10,6 +10,7 @@ import {
   ListOrdered,
   UserCircle,
 } from "lucide-react";
+import Image from "next/image";
 import { ThemeToggle } from "./ThemeToggle";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
@@ -28,6 +29,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import Logo from "../app/logo.svg";
 
 export default function Navigation() {
   const [user, setUser] = useState<SupabaseUser | null>(null);
@@ -147,11 +149,15 @@ export default function Navigation() {
             href="#"
             className="font-bold text-xl flex items-center gap-2 shrink-0 group"
           >
-            <div className="w-8 h-8 rounded-md bg-primary flex items-center justify-center text-primary-foreground shadow-sm">
-              DM
-            </div>
+            <Image
+              src={Logo}
+              width={32}
+              height={32}
+              className="w-8 h-8 rounded-md flex items-center justify-center text-primary-foreground shadow-sm"
+              alt="Splaza Logo"
+            />
             <span className="hidden sm:inline-block tracking-tight text-foreground">
-              Fashion Market
+              Splaza
             </span>
           </Link>
           <Button variant="ghost" onClick={handleLogout}>
@@ -168,14 +174,18 @@ export default function Navigation() {
       <header className="sticky top-0 z-50 w-full border-b border-border bg-background/95 backdrop-blur text-foreground supports-backdrop-filter:bg-background/60">
         <div className="container mx-auto px-4 h-16 flex items-center justify-between gap-4">
           <Link
-            href="/"
+            href="#"
             className="font-bold text-xl flex items-center gap-2 shrink-0 group"
           >
-            <div className="w-8 h-8 rounded-md bg-primary flex items-center justify-center text-primary-foreground shadow-sm group-hover:bg-primary/90 transition-colors">
-              DM
-            </div>
-            <span className="hidden sm:inline-block tracking-tight text-foreground group-hover:text-primary transition-colors">
-              Fashion Market
+            <Image
+              src={Logo}
+              width={32}
+              height={32}
+              className="w-8 h-8 rounded-md flex items-center justify-center text-primary-foreground shadow-sm"
+              alt="Splaza Logo"
+            />
+            <span className="hidden sm:inline-block tracking-tight text-foreground">
+              Splaza
             </span>
           </Link>
 
