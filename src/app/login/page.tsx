@@ -840,7 +840,10 @@ function AuthContent() {
                       <Label>Billing Address (Optional)</Label>
                       <AddressAutocomplete
                         onAddressSelect={(addr) =>
-                          setFormData({ ...formData, address: addr })
+                          setFormData((prev) => ({ ...prev, address: addr }))
+                        }
+                        onChange={(addr) =>
+                          setFormData((prev) => ({ ...prev, address: addr }))
                         }
                         defaultValue={formData.address}
                       />

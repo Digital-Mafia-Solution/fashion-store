@@ -14,6 +14,7 @@ interface AddressAutocompleteProps {
   defaultValue?: string;
   error?: string;
   disabled?: boolean;
+  onChange?: (address: string) => void;
 }
 
 export default function AddressAutocomplete({
@@ -21,6 +22,7 @@ export default function AddressAutocomplete({
   defaultValue = "",
   error,
   disabled = false,
+  onChange,
 }: AddressAutocompleteProps) {
   const {
     ready,
@@ -64,8 +66,11 @@ export default function AddressAutocomplete({
         <Input
           value={value}
           onChange={(e) => {
-            setValue(e.target.value);
+            const v = e.target.value;
+            setValue(v);
             setIsOpen(true);
+            // notify parent of typed value so it can save unsaved addresses
+            onChange?.(v);
           }}
           disabled={!ready || disabled}
           placeholder="Start typing your street address..."
@@ -86,7 +91,8 @@ export default function AddressAutocomplete({
 
       {/* Suggestions Dropdown */}
       {status === "OK" && isOpen && (
-        <ul className="absolute z-50 w-full bg-popover border rounded-md shadow-lg mt-1 max-h-60 overflow-auto animate-in fade-in-0 zoom-in-95">
+        // On small screens position suggestions above the input (keyboard covers bottom)
+        <ul className="absolute z-50 w-full bg-popover border rounded-md shadow-lg max-h-60 overflow-auto animate-in fade-in-0 zoom-in-95 bottom-full mb-1 sm:bottom-auto sm:mb-0 sm:top-full sm:mt-1">
           {data.map(({ place_id, description }) => (
             <li
               key={place_id}
