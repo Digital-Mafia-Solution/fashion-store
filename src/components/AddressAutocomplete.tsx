@@ -13,12 +13,14 @@ interface AddressAutocompleteProps {
   onAddressSelect: (address: string, lat: number, lng: number) => void;
   defaultValue?: string;
   error?: string;
+  disabled?: boolean;
 }
 
 export default function AddressAutocomplete({
   onAddressSelect,
   defaultValue = "",
   error,
+  disabled = false,
 }: AddressAutocompleteProps) {
   const {
     ready,
@@ -65,7 +67,7 @@ export default function AddressAutocomplete({
             setValue(e.target.value);
             setIsOpen(true);
           }}
-          disabled={!ready}
+          disabled={!ready || disabled}
           placeholder="Start typing your street address..."
           className={error ? "border-red-500 pl-10" : "pl-10"}
           autoComplete="off" // Prevent browser autocomplete fighting Google

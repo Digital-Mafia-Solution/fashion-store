@@ -12,6 +12,8 @@ interface AddToCartProps {
     inventory: {
       quantity: number | null;
       locations: {
+        id: string;
+        name: string;
         type: string;
       } | null;
     }[];
@@ -19,7 +21,10 @@ interface AddToCartProps {
   disabled: boolean;
   className?: string;
   variant?: "default" | "outline" | "secondary";
-  selectedSize?: string; // ADDED
+  selectedSize?: string;
+  selectedStoreId?: string;
+  selectedStoreName?: string;
+  storePrice?: number | null;
 }
 
 export default function AddToCartButton({
@@ -28,6 +33,9 @@ export default function AddToCartButton({
   className,
   variant = "default",
   selectedSize,
+  selectedStoreId,
+  selectedStoreName,
+  storePrice,
 }: AddToCartProps) {
   const { addToCart } = useCart();
 
@@ -35,17 +43,20 @@ export default function AddToCartButton({
     <Button
       variant={variant}
       className={className}
-      disabled={disabled}
+      disabled={disabled || !selectedStoreId}
       onClick={(e) => {
         e.preventDefault();
         e.stopPropagation();
 
-        // Validation for size
-        // If sizes exist but none selected, this logic needs to be handled by the parent page usually disabling the button,
-        // but as a safeguard we check if 'selectedSize' is undefined when it might be needed.
-        // For this component, we just pass what we have.
-
-        addToCart(product, selectedSize);
+        if (selectedStoreId && selectedStoreName) {
+          addToCart(
+            product,
+            selectedStoreId,
+            selectedStoreName,
+            selectedSize,
+            storePrice
+          );
+        }
       }}
     >
       <ShoppingCart className="mr-2 h-4 w-4" /> Add

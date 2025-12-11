@@ -24,14 +24,21 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Filter, X, Loader2, Search } from "lucide-react";
 
+interface Store {
+  id: string;
+  name: string;
+}
+
 interface ProductFiltersProps {
   categories: string[];
+  stores?: Store[];
   maxPrice?: number;
   children: React.ReactNode;
 }
 
 export function ProductFilters({
   categories,
+  stores = [],
   maxPrice = 10000,
   children,
 }: ProductFiltersProps) {
@@ -92,6 +99,7 @@ export function ProductFilters({
 
   const activeFiltersCount = [
     searchParams.get("category"),
+    searchParams.get("store"),
     searchParams.get("min"),
     searchParams.get("max"),
     searchParams.get("sort") !== "recency" && searchParams.get("sort"), // Count sort only if not default
@@ -99,14 +107,11 @@ export function ProductFilters({
 
   return (
     <div className="space-y-6">
-      {/* Top Bar */}
-      <div className="sticky top-0 z-40 w-full bg-background/95 backdrop-blur supports-backdrop-filter:bg-background/60 border-b py-4">
-        <div className="container mx-auto px-4 flex flex-col md:flex-row gap-4 items-center justify-between">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+        {/* Sidebar Filters */}
+        <div className="hidden md:block space-y-6 max-h-screen sticky top-20 overflow-y-auto pr-4">
           {/* Search Bar */}
-          <form
-            onSubmit={handleSearchSubmit}
-            className="relative w-full md:max-w-sm"
-          >
+          <form onSubmit={handleSearchSubmit} className="relative w-full">
             <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
             <Input
               type="search"
@@ -117,14 +122,16 @@ export function ProductFilters({
             />
           </form>
 
-          {/* Desktop Filters */}
-          <div className="flex items-center gap-2 w-full md:w-auto overflow-x-auto pb-2 md:pb-0">
-            {/* Sort Dropdown */}
+          <Separator />
+
+          {/* Sort */}
+          <div className="space-y-2">
+            <h3 className="text-sm font-semibold">Sort</h3>
             <Select
               value={searchParams.get("sort") || "recency"}
               onValueChange={(val) => updateFilters({ sort: val })}
             >
-              <SelectTrigger className="w-40">
+              <SelectTrigger className="w-full">
                 <SelectValue placeholder="Sort By" />
               </SelectTrigger>
               <SelectContent>
@@ -133,16 +140,19 @@ export function ProductFilters({
                 <SelectItem value="price_desc">Price: High to Low</SelectItem>
               </SelectContent>
             </Select>
+          </div>
 
-            {/* Category Dropdown (Desktop) */}
+          {/* Category Filter */}
+          <div className="space-y-2">
+            <h3 className="text-sm font-semibold">Category</h3>
             <Select
               value={searchParams.get("category") || "all"}
               onValueChange={(val) =>
                 updateFilters({ category: val === "all" ? null : val })
               }
             >
-              <SelectTrigger className="w-40 hidden md:flex">
-                <SelectValue placeholder="Category" />
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Select Category" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Categories</SelectItem>
@@ -153,13 +163,88 @@ export function ProductFilters({
                 ))}
               </SelectContent>
             </Select>
+          </div>
 
-            {/* Mobile Filter Sheet Trigger */}
+          {/* Store Filter */}
+          {stores.length > 0 && (
+            <div className="space-y-2">
+              <h3 className="text-sm font-semibold">Store</h3>
+              <Select
+                value={searchParams.get("store") || "all"}
+                onValueChange={(val) =>
+                  updateFilters({ store: val === "all" ? null : val })
+                }
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Select Store" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Stores</SelectItem>
+                  {stores.map((store) => (
+                    <SelectItem key={store.id} value={store.id}>
+                      {store.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
+          {/* Price Range */}
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-semibold">Price Range</h3>
+              <span className="text-xs text-muted-foreground">
+                R{priceRange[0]} - R{priceRange[1]}
+              </span>
+            </div>
+            <Slider
+              min={0}
+              max={maxPrice}
+              step={50}
+              value={priceRange}
+              onValueChange={(val) => {
+                setPriceRange(val as [number, number]);
+              }}
+              onValueCommit={(val) => {
+                updateFilters({
+                  min: val[0].toString(),
+                  max: val[1].toString(),
+                });
+              }}
+              className="py-4"
+            />
+          </div>
+
+          {activeFiltersCount > 0 && (
+            <Button variant="outline" className="w-full" onClick={clearFilters}>
+              Clear Filters
+            </Button>
+          )}
+        </div>
+
+        {/* Content */}
+        <div className="md:col-span-3">
+          {/* Mobile Filters */}
+          <div className="flex items-center gap-2 md:hidden mb-4">
+            {/* Mobile Search */}
+            <form onSubmit={handleSearchSubmit} className="relative flex-1">
+              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+              <Input
+                type="search"
+                placeholder="Search products..."
+                className="pl-9 w-full bg-muted/50"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
+            </form>
+
+            {/* Mobile Filters Button */}
             <Sheet open={isOpen} onOpenChange={setIsOpen}>
               <SheetTrigger asChild>
-                <Button variant="outline" className="gap-2 relative">
+                <Button variant="outline" className="gap-2">
                   <Filter className="w-4 h-4" />
-                  Filters
+                  <span className="hidden sm:inline">Filters</span>
                   {activeFiltersCount > 0 && (
                     <Badge
                       variant="secondary"
@@ -204,6 +289,30 @@ export function ProductFilters({
                     </Select>
                   </div>
 
+                  {stores.length > 0 && (
+                    <div className="space-y-2">
+                      <h3 className="text-sm font-medium">Store</h3>
+                      <Select
+                        value={searchParams.get("store") || "all"}
+                        onValueChange={(val) =>
+                          updateFilters({ store: val === "all" ? null : val })
+                        }
+                      >
+                        <SelectTrigger className="w-full">
+                          <SelectValue placeholder="Select Store" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">All Stores</SelectItem>
+                          {stores.map((store) => (
+                            <SelectItem key={store.id} value={store.id}>
+                              {store.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
+
                   <div className="space-y-4">
                     <div className="flex items-center justify-between">
                       <h3 className="text-sm font-medium">Price Range</h3>
@@ -246,34 +355,22 @@ export function ProductFilters({
                 </div>
               </SheetContent>
             </Sheet>
+          </div>
 
-            {activeFiltersCount > 0 && (
-              <Button
-                variant="ghost"
-                size="icon"
-                className="hidden md:flex"
-                onClick={clearFilters}
-                title="Clear all filters"
-              >
-                <X className="w-4 h-4" />
-              </Button>
+          {/* Main Content */}
+          <div className="relative min-h-[50vh]">
+            {children}
+
+            {isPending && (
+              <div className="absolute inset-0 z-50 flex items-start justify-center bg-background/50 backdrop-blur-[2px] pt-20 transition-all duration-300">
+                <div className="bg-background shadow-lg rounded-full px-6 py-3 flex items-center gap-3 border">
+                  <Loader2 className="w-5 h-5 animate-spin text-primary" />
+                  <span className="text-sm font-medium">Updating...</span>
+                </div>
+              </div>
             )}
           </div>
         </div>
-      </div>
-
-      {/* Content Wrapper with Overlay */}
-      <div className="relative min-h-[50vh]">
-        {children}
-
-        {isPending && (
-          <div className="absolute inset-0 z-50 flex items-start justify-center bg-background/50 backdrop-blur-[2px] pt-20 transition-all duration-300">
-            <div className="bg-background shadow-lg rounded-full px-6 py-3 flex items-center gap-3 border">
-              <Loader2 className="w-5 h-5 animate-spin text-primary" />
-              <span className="text-sm font-medium">Updating...</span>
-            </div>
-          </div>
-        )}
       </div>
     </div>
   );

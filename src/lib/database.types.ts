@@ -18,6 +18,7 @@ export type Database = {
         Row: {
           id: string
           location_id: string
+          price: number | null
           product_id: string
           quantity: number | null
           updated_at: string | null
@@ -25,6 +26,7 @@ export type Database = {
         Insert: {
           id?: string
           location_id: string
+          price?: number | null
           product_id: string
           quantity?: number | null
           updated_at?: string | null
@@ -32,6 +34,7 @@ export type Database = {
         Update: {
           id?: string
           location_id?: string
+          price?: number | null
           product_id?: string
           quantity?: number | null
           updated_at?: string | null
@@ -121,6 +124,7 @@ export type Database = {
       }
       orders: {
         Row: {
+          cashier_id: string | null
           created_at: string | null
           customer_id: string | null
           delivery_address: string | null
@@ -131,6 +135,7 @@ export type Database = {
           total_amount: number
         }
         Insert: {
+          cashier_id?: string | null
           created_at?: string | null
           customer_id?: string | null
           delivery_address?: string | null
@@ -141,6 +146,7 @@ export type Database = {
           total_amount: number
         }
         Update: {
+          cashier_id?: string | null
           created_at?: string | null
           customer_id?: string | null
           delivery_address?: string | null
@@ -151,6 +157,13 @@ export type Database = {
           total_amount?: number
         }
         Relationships: [
+          {
+            foreignKeyName: "orders_cashier_id_fkey"
+            columns: ["cashier_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "orders_customer_id_fkey"
             columns: ["customer_id"]
@@ -272,7 +285,7 @@ export type Database = {
       }
     }
     Enums: {
-      fulfillment_type: "courier" | "pickup"
+      fulfillment_type: "courier" | "pickup" | "warehouse_pickup"
       location_type: "store" | "warehouse" | "virtual_courier"
       order_status:
         | "pending"
@@ -281,7 +294,9 @@ export type Database = {
         | "transit"
         | "ready"
         | "delivered"
-      user_role: "admin" | "manager" | "driver" | "customer"
+        | "pos_complete"
+        | "collected"
+      user_role: "admin" | "manager" | "driver" | "customer" | "cashier"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -409,7 +424,7 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
-      fulfillment_type: ["courier", "pickup"],
+      fulfillment_type: ["courier", "pickup", "warehouse_pickup"],
       location_type: ["store", "warehouse", "virtual_courier"],
       order_status: [
         "pending",
@@ -418,8 +433,10 @@ export const Constants = {
         "transit",
         "ready",
         "delivered",
+        "pos_complete",
+        "collected",
       ],
-      user_role: ["admin", "manager", "driver", "customer"],
+      user_role: ["admin", "manager", "driver", "customer", "cashier"],
     },
   },
 } as const

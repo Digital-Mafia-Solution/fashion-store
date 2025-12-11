@@ -21,6 +21,8 @@ export default async function ProductPage({ params }: ProductPageProps) {
       `
       *,
       inventory (
+        id,
+        price,
         quantity,
         locations (
           id,

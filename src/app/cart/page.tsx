@@ -1,6 +1,7 @@
 "use client";
 
 import { useCart } from "@/context/CartContext";
+import type { CartItem } from "@/context/CartContext";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -12,21 +13,13 @@ import {
 } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { Checkbox } from "@/components/ui/checkbox";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import {
   Trash2,
   Plus,
   Minus,
   Truck,
-  Store,
+  Store as StoreIcon,
   ChevronRight,
   CreditCard,
   CheckCircle2,
@@ -39,139 +32,210 @@ import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 import { MockPaymentDialog } from "@/components/MockPaymentDialog";
 import AddressAutocomplete from "@/components/AddressAutocomplete";
+import { SavedAddresses } from "@/components/SavedAddresses";
 import { z } from "zod";
 import { cn } from "@/lib/utils";
-
-interface Location {
-  id: string;
-  name: string;
-  type: string;
-  address: string | null;
-}
 
 const checkoutSchema = z.object({
   address: z.string().min(10, "Please select a valid address from the list"),
 });
 
-// --- STEPS COMPONENT ---
-function CheckoutSteps({ currentStep }: { currentStep: number }) {
-  const steps = [
-    { number: 1, title: "Cart" },
-    { number: 2, title: "Delivery" },
-    { number: 3, title: "Payment" },
-  ];
+function StoreCartSection({
+  storeId,
+  storeName,
+  items,
+  onRemoveItem,
+  onUpdateQuantity,
+  onCheckout,
+  loading,
+}: {
+  storeId: string;
+  storeName: string;
+  items: CartItem[];
+  onRemoveItem: (itemId: string, size?: string) => void;
+  onUpdateQuantity: (itemId: string, delta: number, size?: string) => void;
+  onCheckout: (storeId: string) => void;
+  loading: boolean;
+}) {
+  const storeTotal = items.reduce(
+    (acc, item) => acc + item.price * item.quantity,
+    0
+  );
 
   return (
-    <div className="w-full max-w-3xl mx-auto mb-8">
-      <div className="relative flex justify-between">
-        {/* Connector Line */}
-        <div className="absolute top-1/2 left-0 w-full h-1 bg-muted -z-10 -translate-y-1/2" />
-        <div
-          className="absolute top-1/2 left-0 h-1 bg-primary -z-10 -translate-y-1/2 transition-all duration-300"
-          style={{
-            width: `${((currentStep - 1) / (steps.length - 1)) * 100}%`,
-          }}
-        />
-
-        {steps.map((step) => (
+    <Card className="overflow-hidden">
+      <CardHeader className="bg-muted/50">
+        <div className="flex items-center gap-2">
+          <StoreIcon className="w-5 h-5 text-primary" />
+          <CardTitle className="text-lg">{storeName}</CardTitle>
+        </div>
+      </CardHeader>
+      <CardContent className="p-4 space-y-4">
+        {items.map((item) => (
           <div
-            key={step.number}
-            className="flex flex-col items-center bg-background px-2"
+            key={`${item.id}-${item.size}`}
+            className="flex gap-4 pb-4 border-b last:border-b-0 last:pb-0"
           >
-            <div
-              className={cn(
-                "w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold border-2 transition-all",
-                currentStep >= step.number
-                  ? "border-primary bg-primary text-primary-foreground"
-                  : "border-muted-foreground/30 text-muted-foreground bg-background"
-              )}
+            <Link
+              href={`/product/${item.id}`}
+              className="relative w-20 h-20 bg-muted rounded-md overflow-hidden shrink-0"
             >
-              {currentStep > step.number ? (
-                <CheckCircle2 className="w-5 h-5" />
+              {item.image_url ? (
+                <Image
+                  src={item.image_url}
+                  alt={item.name}
+                  fill
+                  className="object-cover"
+                />
               ) : (
-                step.number
+                <div className="flex items-center justify-center h-full text-xs text-muted-foreground">
+                  No Img
+                </div>
               )}
+            </Link>
+            <div className="flex-1 flex flex-col justify-between">
+              <div className="flex justify-between items-start">
+                <div>
+                  <Link
+                    href={`/product/${item.id}`}
+                    className="font-medium text-sm hover:text-primary hover:underline"
+                  >
+                    {item.name}
+                  </Link>
+                  {item.size && (
+                    <p className="text-xs text-muted-foreground">
+                      Size: {item.size}
+                    </p>
+                  )}
+                </div>
+                <p className="font-bold text-sm">R {item.price}</p>
+              </div>
+
+              <div className="flex items-center justify-between">
+                <div className="flex items-center border rounded-md h-8">
+                  <button
+                    className="px-2 hover:bg-muted h-full"
+                    onClick={() => onUpdateQuantity(item.id, -1, item.size)}
+                  >
+                    <Minus className="w-3 h-3" />
+                  </button>
+                  <span className="w-6 text-center text-xs font-medium">
+                    {item.quantity}
+                  </span>
+                  <button
+                    className="px-2 hover:bg-muted h-full"
+                    onClick={() => onUpdateQuantity(item.id, 1, item.size)}
+                  >
+                    <Plus className="w-3 h-3" />
+                  </button>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="text-destructive h-8 px-2"
+                  onClick={() => onRemoveItem(item.id, item.size)}
+                >
+                  <Trash2 className="w-4 h-4" />
+                </Button>
+              </div>
             </div>
-            <span
-              className={cn(
-                "text-xs mt-2 font-medium",
-                currentStep >= step.number
-                  ? "text-primary"
-                  : "text-muted-foreground"
-              )}
-            >
-              {step.title}
-            </span>
           </div>
         ))}
-      </div>
-    </div>
+      </CardContent>
+      <CardFooter className="flex flex-col gap-3 border-t p-4">
+        <div className="flex justify-between w-full font-bold">
+          <span>Subtotal</span>
+          <span>R {storeTotal.toFixed(2)}</span>
+        </div>
+        <Button
+          className="w-full"
+          onClick={() => onCheckout(storeId)}
+          disabled={loading || items.length === 0}
+        >
+          Proceed to Checkout <ChevronRight className="w-4 h-4 ml-2" />
+        </Button>
+      </CardFooter>
+    </Card>
   );
 }
 
 export default function CartPage() {
-  const [locations, setLocations] = useState<Location[]>([]);
-  const { cart, removeFromCart, updateQuantity, cartTotal, clearCart } =
+  const { cart, cartByStore, removeFromCart, updateQuantity, clearStoreCart } =
     useCart();
   const router = useRouter();
-
-  // --- STATE ---
-  const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
-  const [showPayment, setShowPayment] = useState(false);
   const [error, setError] = useState("");
+  const [userId, setUserId] = useState<string>("");
 
-  // Persisted Form State
-  const [fulfillment, setFulfillment] = useState<"courier" | "pickup">(() => {
-    if (typeof window !== "undefined") {
-      return (
-        (sessionStorage.getItem("cart_fulfillment") as "courier" | "pickup") ||
-        "courier"
-      );
-    }
-    return "courier";
-  });
-
-  const [selectedLocation, setSelectedLocation] = useState(() => {
-    if (typeof window !== "undefined") {
-      return sessionStorage.getItem("cart_location") || "";
-    }
-    return "";
-  });
-
-  const [address, setAddress] = useState(() => {
-    if (typeof window !== "undefined") {
-      return sessionStorage.getItem("cart_address") || "";
-    }
-    return "";
-  });
-
-  const [saveAddress, setSaveAddress] = useState(false);
-
-  // --- EFFECTS ---
-  useEffect(() => {
-    sessionStorage.setItem("cart_fulfillment", fulfillment);
-    sessionStorage.setItem("cart_location", selectedLocation);
-    sessionStorage.setItem("cart_address", address);
-  }, [fulfillment, selectedLocation, address]);
+  // Per-store checkout state
+  const [storeCheckoutState, setStoreCheckoutState] = useState<
+    Record<
+      string,
+      {
+        step: number;
+        fulfillment: "courier" | "pickup";
+        address: string;
+        showPayment: boolean;
+      }
+    >
+  >({});
 
   useEffect(() => {
-    supabase
-      .from("locations")
-      .select("id, name, type, address")
-      .eq("is_active", true)
-      .then(({ data }) => {
-        if (data) setLocations(data);
-      });
+    // Fetch current user ID
+    const fetchUser = async () => {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (user) {
+        setUserId(user.id);
+      }
+    };
+    fetchUser();
   }, []);
 
-  // --- HANDLERS ---
+  useEffect(() => {
+    // Initialize checkout state for each store
+    const initialState: typeof storeCheckoutState = {};
+    Object.keys(cartByStore).forEach((storeId) => {
+      initialState[storeId] = {
+        step: 1,
+        fulfillment: "courier",
+        address: "",
+        showPayment: false,
+      };
+    });
+    setStoreCheckoutState(initialState);
+  }, [cartByStore]);
 
-  const handleNextStep = async () => {
-    setError("");
+  const getStoreState = (storeId: string) => {
+    return (
+      storeCheckoutState[storeId] || {
+        step: 1,
+        fulfillment: "courier",
+        address: "",
+        showPayment: false,
+      }
+    );
+  };
 
-    // Step 1 -> 2: Check Login
-    if (step === 1) {
+  const updateStoreState = (
+    storeId: string,
+    updates: Partial<typeof getStoreState>
+  ) => {
+    setStoreCheckoutState((prev) => ({
+      ...prev,
+      [storeId]: {
+        ...getStoreState(storeId),
+        ...updates,
+      },
+    }));
+  };
+
+  const handleCheckout = async (storeId: string) => {
+    const state = getStoreState(storeId);
+
+    if (state.step === 1) {
+      // Check login
       const {
         data: { user },
       } = await supabase.auth.getUser();
@@ -180,21 +244,14 @@ export default function CartPage() {
         router.push("/login?next=/cart");
         return;
       }
-      setStep(2);
-      window.scrollTo(0, 0);
+      updateStoreState(storeId, { step: 2 });
       return;
     }
 
-    // Step 2 -> 3: Validate Delivery Info
-    if (step === 2) {
-      if (!selectedLocation) {
-        toast.error("Please select a fulfillment store");
-        setError("Store selection is required for inventory check.");
-        return;
-      }
-
-      if (fulfillment === "courier") {
-        const validation = checkoutSchema.safeParse({ address });
+    if (state.step === 2) {
+      // Validate delivery info
+      if (state.fulfillment === "courier") {
+        const validation = checkoutSchema.safeParse({ address: state.address });
         if (!validation.success) {
           const msg = validation.error.issues[0].message;
           setError(msg);
@@ -202,38 +259,45 @@ export default function CartPage() {
           return;
         }
       }
-      setStep(3);
-      window.scrollTo(0, 0);
+      updateStoreState(storeId, { step: 3 });
+      return;
     }
   };
 
-  const handleBackStep = () => {
-    if (step > 1) setStep(step - 1);
-  };
+  const handlePaymentSuccess = async (storeId: string) => {
+    const state = getStoreState(storeId);
+    const storeItems = cartByStore[storeId] || [];
 
-  const handlePaymentSuccess = async () => {
-    setShowPayment(false);
+    if (!storeItems.length) {
+      toast.error("No items in this store's cart");
+      return;
+    }
+
     setLoading(true);
-
     try {
       const {
         data: { user },
       } = await supabase.auth.getUser();
       if (!user) throw new Error("User not found");
 
-      const deliveryFee = fulfillment === "courier" ? 100 : 0;
-      const finalTotal = cartTotal + deliveryFee;
-      const fulfillmentLocationId = selectedLocation;
+      const deliveryFee = state.fulfillment === "courier" ? 100 : 0;
+      const storeTotal = storeItems.reduce(
+        (acc, item) => acc + item.price * item.quantity,
+        0
+      );
+      const finalTotal = storeTotal + deliveryFee;
 
+      // Use storeId as pickup_location_id (the store they selected items from)
       const { data: order, error: orderError } = await supabase
         .from("orders")
         .insert({
           customer_id: user.id,
           total_amount: finalTotal,
           status: "paid",
-          fulfillment_type: fulfillment,
-          pickup_location_id: fulfillmentLocationId,
-          delivery_address: fulfillment === "courier" ? address : null,
+          fulfillment_type: state.fulfillment,
+          pickup_location_id: storeId,
+          delivery_address:
+            state.fulfillment === "courier" ? state.address : null,
         })
         .select()
         .single();
@@ -241,7 +305,7 @@ export default function CartPage() {
       if (orderError) throw orderError;
 
       // Process Items
-      for (const item of cart) {
+      for (const item of storeItems) {
         const { error: itemsError } = await supabase
           .from("order_items")
           .insert({
@@ -253,28 +317,20 @@ export default function CartPage() {
 
         if (itemsError) throw itemsError;
 
-        // Decrement Stock
+        // Decrement Stock - use storeId as location
         const { error: stockError } = await supabase.rpc("process_sale", {
-          p_location_id: fulfillmentLocationId,
+          p_location_id: storeId,
           p_product_id: item.id,
           p_quantity: item.quantity,
         });
 
-        if (stockError) console.error("Stock update failed", stockError);
+        if (stockError) throw stockError;
       }
 
-      // Save Address Logic
-      if (fulfillment === "courier" && saveAddress && address) {
-        await supabase
-          .from("profiles")
-          .update({ billing_address: { address: address } })
-          .eq("id", user.id);
-      }
-
-      clearCart();
-      sessionStorage.clear(); // Clear all checkout session data
-      toast.success("Order placed successfully!");
-      router.push("/orders");
+      clearStoreCart(storeId);
+      updateStoreState(storeId, { showPayment: false, step: 1 });
+      const storeName = storeItems[0]?.storeName || "Store";
+      toast.success(`Order from ${storeName} placed!`);
     } catch (error: unknown) {
       toast.error("Failed to place order. Please try again.");
       console.error(error);
@@ -287,7 +343,7 @@ export default function CartPage() {
     return (
       <div className="container mx-auto px-4 py-20 text-center">
         <div className="w-20 h-20 bg-muted/50 rounded-full flex items-center justify-center mx-auto mb-6">
-          <Store className="w-10 h-10 text-muted-foreground" />
+          <StoreIcon className="w-10 h-10 text-muted-foreground" />
         </div>
         <h1 className="text-2xl font-bold mb-2">Your cart is empty</h1>
         <p className="text-muted-foreground mb-8">
@@ -300,400 +356,307 @@ export default function CartPage() {
     );
   }
 
-  const deliveryFee = fulfillment === "courier" ? 100 : 0;
-  const finalTotal = cartTotal + deliveryFee;
+  const storeIds = Object.keys(cartByStore);
 
   return (
-    <div className="container mx-auto px-4 py-8 md:py-12 max-w-5xl">
-      <h1 className="text-3xl font-bold mb-8 text-center">Checkout</h1>
+    <div className="container mx-auto px-4 py-8 md:py-12 max-w-6xl">
+      <h1 className="text-3xl font-bold mb-8 text-center">Shopping Cart</h1>
 
-      <CheckoutSteps currentStep={step} />
+      <div className="space-y-8">
+        {storeIds.map((storeId) => {
+          const storeItems = cartByStore[storeId] || [];
+          const storeName = storeItems[0]?.storeName || "Store";
+          const state = getStoreState(storeId);
 
-      <div className="grid lg:grid-cols-3 gap-8 mt-8">
-        {/* --- LEFT COLUMN: MAIN CONTENT --- */}
-        <div className="lg:col-span-2 space-y-6">
-          {/* STEP 1: CART REVIEW */}
-          {step === 1 && (
-            <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-xl font-semibold">
-                  Review Cart ({cart.length})
-                </h2>
-              </div>
+          return (
+            <div key={storeId}>
+              {state.step === 1 && (
+                <StoreCartSection
+                  storeId={storeId}
+                  storeName={storeName}
+                  items={storeItems}
+                  onRemoveItem={(itemId, size) =>
+                    removeFromCart(itemId, storeId, size)
+                  }
+                  onUpdateQuantity={(itemId, delta, size) =>
+                    updateQuantity(itemId, storeId, delta, size)
+                  }
+                  onCheckout={handleCheckout}
+                  loading={loading}
+                />
+              )}
 
-              {cart.map((item) => (
-                <Card
-                  key={`${item.id}-${item.size}`}
-                  className="overflow-hidden"
-                >
-                  <CardContent className="p-4 flex gap-4">
-                    <Link
-                      href={`/product/${item.id}`}
-                      className="relative w-24 h-24 bg-muted rounded-md overflow-hidden shrink-0"
-                    >
-                      {item.image_url ? (
-                        <Image
-                          src={item.image_url}
-                          alt={item.name}
-                          fill
-                          className="object-cover"
-                        />
-                      ) : (
-                        <div className="flex items-center justify-center h-full text-xs text-muted-foreground">
-                          No Img
-                        </div>
-                      )}
-                    </Link>
-                    <div className="flex-1 flex flex-col justify-between">
-                      <div className="flex justify-between items-start">
-                        <div>
-                          <Link
-                            href={`/product/${item.id}`}
-                            className="font-medium hover:text-primary hover:underline"
-                          >
-                            {item.name}
-                          </Link>
-                          {item.size && (
-                            <p className="text-sm text-muted-foreground">
-                              Size: {item.size}
-                            </p>
+              {state.step === 2 && (
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <StoreIcon className="w-5 h-5 text-primary" />
+                      Checkout - {storeName}
+                    </CardTitle>
+                    <CardDescription>
+                      Step 1 of 2: Delivery Details
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-6">
+                    <div className="space-y-4">
+                      <h3 className="font-semibold">Delivery Method</h3>
+                      <RadioGroup
+                        value={state.fulfillment}
+                        onValueChange={(v: "courier" | "pickup") =>
+                          updateStoreState(storeId, { fulfillment: v })
+                        }
+                      >
+                        <div
+                          className={cn(
+                            "flex items-center space-x-2 border p-4 rounded-lg cursor-pointer transition-all",
+                            state.fulfillment === "courier"
+                              ? "border-primary bg-primary/5"
+                              : "hover:bg-muted/50"
                           )}
-                        </div>
-                        <p className="font-bold">R {item.price}</p>
-                      </div>
-
-                      <div className="flex items-center justify-between mt-4">
-                        <div className="flex items-center border rounded-md h-8">
-                          <button
-                            className="px-2 hover:bg-muted h-full"
-                            onClick={() =>
-                              updateQuantity(item.id, -1, item.size)
-                            }
-                          >
-                            <Minus className="w-3 h-3" />
-                          </button>
-                          <span className="w-8 text-center text-sm font-medium">
-                            {item.quantity}
-                          </span>
-                          <button
-                            className="px-2 hover:bg-muted h-full"
-                            onClick={() =>
-                              updateQuantity(item.id, 1, item.size)
-                            }
-                          >
-                            <Plus className="w-3 h-3" />
-                          </button>
-                        </div>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="text-destructive h-8 px-2"
-                          onClick={() => removeFromCart(item.id, item.size)}
                         >
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          )}
-
-          {/* STEP 2: DELIVERY DETAILS */}
-          {step === 2 && (
-            <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-              <Card>
-                <CardHeader>
-                  <CardTitle>Delivery Method</CardTitle>
-                  <CardDescription>
-                    Choose how you want to receive your order.
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-6">
-                  <RadioGroup
-                    value={fulfillment}
-                    onValueChange={(v: "courier" | "pickup") =>
-                      setFulfillment(v)
-                    }
-                  >
-                    <div
-                      className={cn(
-                        "flex items-center space-x-2 border p-4 rounded-lg cursor-pointer transition-all",
-                        fulfillment === "courier"
-                          ? "border-primary bg-primary/5"
-                          : "hover:bg-muted/50"
-                      )}
-                    >
-                      <RadioGroupItem value="courier" id="r-courier" />
-                      <Label
-                        htmlFor="r-courier"
-                        className="flex-1 cursor-pointer flex items-center gap-3"
-                      >
-                        <div className="bg-background p-2 rounded-full border">
-                          <Truck className="w-5 h-5 text-primary" />
-                        </div>
-                        <div>
-                          <span className="block font-medium">
-                            Door-to-Door Courier
-                          </span>
-                          <span className="text-sm text-muted-foreground">
-                            Standard delivery (2-5 days)
-                          </span>
-                        </div>
-                        <div className="ml-auto font-bold text-sm">
-                          R 100.00
-                        </div>
-                      </Label>
-                    </div>
-
-                    <div
-                      className={cn(
-                        "flex items-center space-x-2 border p-4 rounded-lg cursor-pointer transition-all",
-                        fulfillment === "pickup"
-                          ? "border-primary bg-primary/5"
-                          : "hover:bg-muted/50"
-                      )}
-                    >
-                      <RadioGroupItem value="pickup" id="r-pickup" />
-                      <Label
-                        htmlFor="r-pickup"
-                        className="flex-1 cursor-pointer flex items-center gap-3"
-                      >
-                        <div className="bg-background p-2 rounded-full border">
-                          <Store className="w-5 h-5 text-primary" />
-                        </div>
-                        <div>
-                          <span className="block font-medium">
-                            Local Pickup
-                          </span>
-                          <span className="text-sm text-muted-foreground">
-                            Collect from a store near you
-                          </span>
-                        </div>
-                        <div className="ml-auto font-bold text-sm">Free</div>
-                      </Label>
-                    </div>
-                  </RadioGroup>
-
-                  <Separator />
-
-                  <div className="space-y-4">
-                    <div className="space-y-2">
-                      <Label>
-                        {fulfillment === "pickup"
-                          ? "Select Pickup Store"
-                          : "Select Fulfillment Store"}
-                        {fulfillment === "courier" && (
-                          <span className="text-xs font-normal text-muted-foreground ml-2">
-                            (Stock source)
-                          </span>
-                        )}
-                      </Label>
-                      <Select
-                        value={selectedLocation}
-                        onValueChange={setSelectedLocation}
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select a location..." />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {locations.map((loc) => (
-                            <SelectItem key={loc.id} value={loc.id}>
-                              {loc.name} ({loc.type})
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    {fulfillment === "courier" && (
-                      <div className="space-y-2 animate-in slide-in-from-top-2">
-                        <Label>Delivery Address</Label>
-                        <AddressAutocomplete
-                          onAddressSelect={(addr) => setAddress(addr)}
-                          defaultValue={address}
-                          error={error}
-                        />
-                        <div className="flex items-center space-x-2 pt-2">
-                          <Checkbox
-                            id="save-address"
-                            checked={saveAddress}
-                            onCheckedChange={(checked) =>
-                              setSaveAddress(checked as boolean)
-                            }
+                          <RadioGroupItem
+                            value="courier"
+                            id={`${storeId}-courier`}
                           />
                           <Label
-                            htmlFor="save-address"
-                            className="text-sm font-normal cursor-pointer"
+                            htmlFor={`${storeId}-courier`}
+                            className="flex-1 cursor-pointer flex items-center gap-3"
                           >
-                            Save as my default billing address
+                            <div className="bg-background p-2 rounded-full border">
+                              <Truck className="w-5 h-5 text-primary" />
+                            </div>
+                            <div>
+                              <span className="block font-medium">
+                                Door-to-Door Courier
+                              </span>
+                              <span className="text-sm text-muted-foreground">
+                                Standard delivery (2-5 days) - R 100
+                              </span>
+                            </div>
                           </Label>
+                        </div>
+
+                        <div
+                          className={cn(
+                            "flex items-center space-x-2 border p-4 rounded-lg cursor-pointer transition-all",
+                            state.fulfillment === "pickup"
+                              ? "border-primary bg-primary/5"
+                              : "hover:bg-muted/50"
+                          )}
+                        >
+                          <RadioGroupItem
+                            value="pickup"
+                            id={`${storeId}-pickup`}
+                          />
+                          <Label
+                            htmlFor={`${storeId}-pickup`}
+                            className="flex-1 cursor-pointer flex items-center gap-3"
+                          >
+                            <div className="bg-background p-2 rounded-full border">
+                              <StoreIcon className="w-5 h-5 text-primary" />
+                            </div>
+                            <div>
+                              <span className="block font-medium">
+                                Store Pickup
+                              </span>
+                              <span className="text-sm text-muted-foreground">
+                                Collect from {storeName} - Free
+                              </span>
+                            </div>
+                          </Label>
+                        </div>
+                      </RadioGroup>
+                    </div>
+
+                    {state.fulfillment === "courier" && (
+                      <div className="space-y-4 animate-in slide-in-from-top-2">
+                        {userId && (
+                          <div>
+                            <SavedAddresses
+                              userId={userId}
+                              onAddressSelect={(addr) =>
+                                updateStoreState(storeId, { address: addr })
+                              }
+                              displayOnly={false}
+                            />
+                          </div>
+                        )}
+
+                        <Separator />
+
+                        <div className="space-y-2">
+                          <div className="flex items-center justify-between">
+                            <Label>Enter New Address</Label>
+                            {state.address && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() =>
+                                  updateStoreState(storeId, { address: "" })
+                                }
+                                className="h-7 text-xs"
+                              >
+                                Change Address
+                              </Button>
+                            )}
+                          </div>
+                          <AddressAutocomplete
+                            onAddressSelect={(addr) =>
+                              updateStoreState(storeId, { address: addr })
+                            }
+                            defaultValue={state.address}
+                            error={error}
+                            disabled={!!state.address}
+                          />
                         </div>
                       </div>
                     )}
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-          )}
-
-          {/* STEP 3: PAYMENT & SUMMARY */}
-          {step === 3 && (
-            <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-              <Card>
-                <CardHeader>
-                  <CardTitle>Order Summary</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  {cart.map((item) => (
-                    <div key={item.id} className="flex justify-between text-sm">
-                      <span className="text-muted-foreground">
-                        {item.quantity} x {item.name} ({item.size})
-                      </span>
-                      <span>R {(item.price * item.quantity).toFixed(2)}</span>
-                    </div>
-                  ))}
-                  <Separator className="my-2" />
-                  <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">Subtotal</span>
-                    <span>R {cartTotal.toFixed(2)}</span>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">
-                      Delivery Method
-                    </span>
-                    <span className="capitalize">{fulfillment}</span>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">Delivery Fee</span>
-                    <span>
-                      {deliveryFee === 0
-                        ? "Free"
-                        : `R ${deliveryFee.toFixed(2)}`}
-                    </span>
-                  </div>
-                  <Separator className="my-2" />
-                  <div className="flex justify-between font-bold text-lg">
-                    <span>Total To Pay</span>
-                    <span>R {finalTotal.toFixed(2)}</span>
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader>
-                  <CardTitle>Payment Method</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="border p-4 rounded-lg flex items-center gap-3 bg-primary/5 border-primary">
-                    <CreditCard className="w-5 h-5 text-primary" />
-                    <span className="font-medium">Credit / Debit Card</span>
-                    <CheckCircle2 className="w-5 h-5 text-primary ml-auto" />
-                  </div>
-                  <p className="text-xs text-muted-foreground mt-3 text-center">
-                    Secure payment processing via our payment partner.
-                  </p>
-                </CardContent>
-              </Card>
-            </div>
-          )}
-        </div>
-
-        {/* --- RIGHT COLUMN: SUMMARY STICKY --- */}
-        <div className="lg:col-span-1">
-          <div className="sticky top-24 space-y-6">
-            <Card className="bg-muted/30">
-              <CardHeader>
-                <CardTitle className="text-lg">Total</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <div className="flex justify-between text-sm">
-                  <span>Items ({cart.length})</span>
-                  <span>R {cartTotal.toFixed(2)}</span>
-                </div>
-                {step > 1 && (
-                  <div className="flex justify-between text-sm text-muted-foreground">
-                    <span>Delivery</span>
-                    <span>
-                      {deliveryFee === 0 ? "Free" : `R ${deliveryFee}`}
-                    </span>
-                  </div>
-                )}
-                <Separator />
-                <div className="flex justify-between font-bold text-xl">
-                  <span>R {finalTotal.toFixed(2)}</span>
-                </div>
-              </CardContent>
-              <CardFooter className="flex flex-col gap-3">
-                {step === 1 && (
-                  <Button className="w-full" size="lg" onClick={handleNextStep}>
-                    Proceed to Checkout{" "}
-                    <ChevronRight className="w-4 h-4 ml-2" />
-                  </Button>
-                )}
-                {step === 2 && (
-                  <>
-                    <Button
-                      className="w-full"
-                      size="lg"
-                      onClick={handleNextStep}
-                    >
-                      Proceed to Payment{" "}
-                      <ChevronRight className="w-4 h-4 ml-2" />
-                    </Button>
+                  </CardContent>
+                  <CardFooter className="flex gap-3">
                     <Button
                       variant="outline"
-                      className="w-full"
-                      onClick={handleBackStep}
+                      className="flex-1"
+                      onClick={() => updateStoreState(storeId, { step: 1 })}
                     >
                       Back to Cart
                     </Button>
-                  </>
-                )}
-                {step === 3 && (
-                  <>
                     <Button
-                      className="w-full"
-                      size="lg"
-                      onClick={() => setShowPayment(true)}
+                      className="flex-1"
+                      onClick={() => handleCheckout(storeId)}
+                    >
+                      Review Order <ChevronRight className="w-4 h-4 ml-2" />
+                    </Button>
+                  </CardFooter>
+                </Card>
+              )}
+
+              {state.step === 3 && (
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <StoreIcon className="w-5 h-5 text-primary" />
+                      Review Order - {storeName}
+                    </CardTitle>
+                    <CardDescription>Step 2 of 2: Payment</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-6">
+                    <div className="space-y-3">
+                      {storeItems.map((item) => (
+                        <div
+                          key={`${item.id}-${item.size}`}
+                          className="flex justify-between text-sm border-b pb-3"
+                        >
+                          <span className="text-muted-foreground">
+                            {item.quantity}x {item.name}
+                            {item.size && ` (${item.size})`}
+                          </span>
+                          <span>
+                            R {(item.price * item.quantity).toFixed(2)}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+
+                    <Separator />
+
+                    <div className="space-y-2">
+                      <div className="flex justify-between text-sm">
+                        <span>Subtotal</span>
+                        <span>
+                          R{" "}
+                          {storeItems
+                            .reduce(
+                              (acc, item) => acc + item.price * item.quantity,
+                              0
+                            )
+                            .toFixed(2)}
+                        </span>
+                      </div>
+                      <div className="flex justify-between text-sm">
+                        <span>Delivery</span>
+                        <span>
+                          {state.fulfillment === "courier"
+                            ? "R 100.00"
+                            : "Free"}
+                        </span>
+                      </div>
+                      <div className="flex justify-between text-sm">
+                        <span>Delivery Method</span>
+                        <span className="capitalize">
+                          {state.fulfillment === "courier"
+                            ? "Courier"
+                            : "Store Pickup"}
+                        </span>
+                      </div>
+                      <Separator />
+                      <div className="flex justify-between font-bold text-lg">
+                        <span>Total</span>
+                        <span>
+                          R{" "}
+                          {(
+                            storeItems.reduce(
+                              (acc, item) => acc + item.price * item.quantity,
+                              0
+                            ) + (state.fulfillment === "courier" ? 100 : 0)
+                          ).toFixed(2)}
+                        </span>
+                      </div>
+                    </div>
+
+                    <Card className="bg-primary/5 border-primary">
+                      <CardContent className="p-4 flex items-center gap-3">
+                        <CreditCard className="w-5 h-5 text-primary" />
+                        <div>
+                          <div className="font-medium text-sm">
+                            Credit / Debit Card
+                          </div>
+                          <div className="text-xs text-muted-foreground">
+                            Secure payment processing
+                          </div>
+                        </div>
+                        <CheckCircle2 className="w-5 h-5 text-primary ml-auto" />
+                      </CardContent>
+                    </Card>
+                  </CardContent>
+                  <CardFooter className="flex gap-3">
+                    <Button
+                      variant="outline"
+                      className="flex-1"
+                      onClick={() => updateStoreState(storeId, { step: 2 })}
+                      disabled={loading}
+                    >
+                      Back
+                    </Button>
+                    <Button
+                      className="flex-1"
+                      onClick={() =>
+                        updateStoreState(storeId, { showPayment: true })
+                      }
                       disabled={loading}
                     >
                       {loading ? "Processing..." : "Pay Now"}
                     </Button>
-                    <Button
-                      variant="outline"
-                      className="w-full"
-                      onClick={handleBackStep}
-                      disabled={loading}
-                    >
-                      Back to Delivery
-                    </Button>
-                  </>
-                )}
-              </CardFooter>
-            </Card>
+                  </CardFooter>
 
-            <div className="flex items-center justify-center gap-2 text-xs text-muted-foreground">
-              <div className="flex -space-x-2">
-                <div className="w-6 h-4 bg-gray-300 rounded" title="Visa"></div>
-                <div
-                  className="w-6 h-4 bg-gray-300 rounded"
-                  title="Mastercard"
-                ></div>
-              </div>
-              <span>Secure Checkout</span>
+                  <MockPaymentDialog
+                    open={state.showPayment}
+                    onOpenChange={(open) =>
+                      updateStoreState(storeId, { showPayment: open })
+                    }
+                    amount={
+                      storeItems.reduce(
+                        (acc, item) => acc + item.price * item.quantity,
+                        0
+                      ) + (state.fulfillment === "courier" ? 100 : 0)
+                    }
+                    onConfirm={() => handlePaymentSuccess(storeId)}
+                  />
+                </Card>
+              )}
             </div>
-          </div>
-        </div>
+          );
+        })}
       </div>
-
-      <MockPaymentDialog
-        open={showPayment}
-        onOpenChange={setShowPayment}
-        amount={finalTotal}
-        onConfirm={handlePaymentSuccess}
-      />
     </div>
   );
 }

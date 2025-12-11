@@ -80,7 +80,7 @@ export function ProductCard({ product }: ProductCardProps) {
           disabled={isSoldOut}
         >
           <Link href={`/product/${product.id}`}>
-            {isSoldOut ? "Sold Out" : "Select Size"}
+            {isSoldOut ? "Sold Out" : "View Details"}
           </Link>
         </Button>
       </div>

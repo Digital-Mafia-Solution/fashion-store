@@ -21,6 +21,7 @@ type ProductWithInventory = Tables<"products"> & {
     | {
         quantity: number | null;
         locations: {
+          id?: string | null;
           type: "store" | "warehouse" | "virtual_courier";
         } | null;
       }[]
@@ -31,6 +32,7 @@ export default async function Index({ searchParams }: Props) {
   const params = await searchParams;
   const q = typeof params.q === "string" ? params.q : "";
   const category = typeof params.category === "string" ? params.category : "";
+  const storeId = typeof params.store === "string" ? params.store : "";
   const sort = typeof params.sort === "string" ? params.sort : "recency";
   const min = typeof params.min === "string" ? Number(params.min) : 0;
   const max = typeof params.max === "string" ? Number(params.max) : 100000;
@@ -39,13 +41,13 @@ export default async function Index({ searchParams }: Props) {
   const isFiltered = !!(
     q ||
     category ||
+    storeId ||
     (sort && sort !== "recency") ||
     params.min ||
     params.max
   );
 
-  // --- FETCH ALL CATEGORIES ---
-  // Needed for the filter dropdown
+  // --- FETCH ALL CATEGORIES AND STORES ---
   const { data: allProductsCategories } = await supabase
     .from("products")
     .select("category");
@@ -58,10 +60,22 @@ export default async function Index({ searchParams }: Props) {
   });
   const categories = Array.from(categorySet).sort();
 
+  // Fetch stores
+  const { data: storesData } = await supabase
+    .from("locations")
+    .select("id, name, type")
+    .eq("is_active", true)
+    .eq("type", "store");
+
+  const stores = (storesData || []).map((loc) => ({
+    id: loc.id,
+    name: loc.name,
+  }));
+
   // --- FETCH FILTERED PRODUCTS ---
   let query = supabase.from("products").select(`
     *,
-    inventory ( quantity, locations ( type ) )
+    inventory ( quantity, locations ( id, type ) )
   `);
 
   if (q) {
@@ -94,7 +108,19 @@ export default async function Index({ searchParams }: Props) {
   let filteredProducts: ProductWithInventory[] | null = null;
   if (isFiltered) {
     const { data } = await query;
-    filteredProducts = data as ProductWithInventory[] | null;
+    let products = data as ProductWithInventory[] | null;
+
+    // Apply store filter client-side
+    if (storeId && products) {
+      products = products.filter((product) => {
+        const hasStoreInventory = product.inventory?.some(
+          (inv) => inv.locations?.id === storeId && (inv.quantity ?? 0) > 0
+        );
+        return hasStoreInventory;
+      });
+    }
+
+    filteredProducts = products;
   }
 
   // --- STANDARD HOME SECTIONS (FETCHED IF NOT FILTERED) ---
@@ -122,7 +148,8 @@ export default async function Index({ searchParams }: Props) {
     // Fetch Category Images
     const allProdsRes = await supabase
       .from("products")
-      .select("category, image_url");
+      .select("category, image_url")
+      .limit(12);
     const categoryMap = new Map<string, string>();
     allProdsRes.data?.forEach((p) => {
       if (p.category && Array.isArray(p.category)) {
@@ -175,7 +202,7 @@ export default async function Index({ searchParams }: Props) {
   );
 
   return (
-    <ProductFilters categories={categories}>
+    <ProductFilters categories={categories} stores={stores}>
       <div className="container mx-auto px-4 py-4 md:py-12 mb-20 space-y-12 md:space-y-16">
         {isFiltered ? (
           <div>
@@ -244,28 +271,24 @@ export default async function Index({ searchParams }: Props) {
                 </CarouselItem>
               ))
             )}
-
-            {renderSection(
-              "Categories",
-              "Browse by collection.",
-              "/categories",
-              homeCategories.map((cat) => (
-                <CategoryCard
-                  key={cat.name}
-                  name={cat.name}
-                  image={cat.image}
-                />
-              )),
-              homeCategories.map((cat) => (
-                <CarouselItem
-                  key={cat.name}
-                  className="basis-1/2 md:basis-1/3 pl-4"
-                >
-                  <CategoryCard name={cat.name} image={cat.image} />
-                </CarouselItem>
-              ))
-            )}
           </>
+        )}
+
+        {renderSection(
+          "Categories",
+          "Browse by collection.",
+          "/categories",
+          homeCategories.map((cat) => (
+            <CategoryCard key={cat.name} name={cat.name} image={cat.image} />
+          )),
+          homeCategories.map((cat) => (
+            <CarouselItem
+              key={cat.name}
+              className="basis-1/2 md:basis-1/3 pl-4"
+            >
+              <CategoryCard name={cat.name} image={cat.image} />
+            </CarouselItem>
+          ))
         )}
       </div>
     </ProductFilters>
