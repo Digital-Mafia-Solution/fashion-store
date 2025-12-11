@@ -773,7 +773,7 @@ export default function CartPage() {
 
                     <Card className="bg-primary/5 border-primary">
                       <CardContent className="p-4">
-                        <div className="flex items-center gap-3">
+                        <div className="flex flex-col sm:flex-row sm:items-center gap-3">
                           <div className="flex-1">
                             <div className="font-medium text-sm">
                               Payment Method
@@ -793,7 +793,8 @@ export default function CartPage() {
                               )}
                             </div>
                           </div>
-                          <div className="flex gap-2">
+
+                          <div className="flex w-full sm:w-auto gap-2 items-center">
                             <Button
                               variant="outline"
                               size="sm"
@@ -803,10 +804,11 @@ export default function CartPage() {
                                   paymentDialogMode: "select",
                                 })
                               }
-                              className="h-8"
+                              className="w-full sm:w-auto h-8"
                             >
                               Select Payment Method
                             </Button>
+
                             {state.paymentMethod && (
                               <Button
                                 variant="ghost"
@@ -816,7 +818,7 @@ export default function CartPage() {
                                     paymentMethod: undefined,
                                   })
                                 }
-                                className="text-destructive h-8"
+                                className="text-destructive h-8 w-full sm:w-auto"
                               >
                                 Remove
                               </Button>
