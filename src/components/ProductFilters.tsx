@@ -231,7 +231,10 @@ export function ProductFilters({
           <div className="flex items-center gap-2 md:hidden mb-4">
             {/* Mobile Search */}
             {showSearch && (
-              <form onSubmit={handleSearchSubmit} className="relative flex-1">
+              <form
+                onSubmit={handleSearchSubmit}
+                className="relative flex-1 min-w-0"
+              >
                 <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                 <Input
                   type="search"
@@ -246,7 +249,11 @@ export function ProductFilters({
             {/* Mobile Filters Button */}
             <Sheet open={isOpen} onOpenChange={setIsOpen}>
               <SheetTrigger asChild>
-                <Button variant="outline" className="gap-2">
+                <Button
+                  variant="outline"
+                  className="gap-2 shrink-0 fixed top-20 right-4 z-50 md:hidden"
+                  aria-label="Open filters"
+                >
                   <Filter className="w-4 h-4" />
                   <span className="hidden sm:inline">Filters</span>
                   {activeFiltersCount > 0 && (
