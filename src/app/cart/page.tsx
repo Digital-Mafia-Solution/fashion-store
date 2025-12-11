@@ -12,6 +12,13 @@ import {
   CardFooter,
 } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Separator } from "@/components/ui/separator";
 import {
@@ -21,16 +28,18 @@ import {
   Truck,
   Store as StoreIcon,
   ChevronRight,
-  CreditCard,
-  CheckCircle2,
+  MapPin,
+  Loader2,
 } from "lucide-react";
+import { getGateway } from "@/lib/payments/registry";
 import Link from "next/link";
 import Image from "next/image";
 import { useState, useEffect } from "react";
+import type { PaymentMethodId } from "@/lib/payments/types";
 import { supabase } from "@/lib/supabase";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
-import { MockPaymentDialog } from "@/components/MockPaymentDialog";
+import PaymentDialog from "@/components/PaymentDialog";
 import AddressAutocomplete from "@/components/AddressAutocomplete";
 import { SavedAddresses } from "@/components/SavedAddresses";
 import { z } from "zod";
@@ -173,9 +182,13 @@ export default function CartPage() {
       string,
       {
         step: number;
-        fulfillment: "courier" | "pickup";
+        fulfillment: "courier" | "pickup" | "warehouse";
         address: string;
         showPayment: boolean;
+        paymentMethod?: PaymentMethodId;
+        paymentDialogMode?: "select" | "pay";
+        warehouseId?: string | null;
+        warehouseName?: string | null;
       }
     >
   >({});
@@ -202,6 +215,10 @@ export default function CartPage() {
         fulfillment: "courier",
         address: "",
         showPayment: false,
+        paymentMethod: undefined,
+        paymentDialogMode: undefined,
+        warehouseId: undefined,
+        warehouseName: undefined,
       };
     });
     setStoreCheckoutState(initialState);
@@ -214,21 +231,119 @@ export default function CartPage() {
         fulfillment: "courier",
         address: "",
         showPayment: false,
+        paymentMethod: undefined,
+        paymentDialogMode: undefined,
+        warehouseId: undefined,
+        warehouseName: undefined,
       }
     );
   };
+
+  function WarehouseSelector({ storeId }: { storeId: string }) {
+    const state = getStoreState(storeId);
+    const [warehouses, setWarehouses] = useState<
+      { id: string; name: string }[]
+    >([]);
+    const [loadingWh, setLoadingWh] = useState(false);
+
+    useEffect(() => {
+      let mounted = true;
+      const load = async () => {
+        setLoadingWh(true);
+        try {
+          // Query all locations of type 'warehouse' — do not filter by stock
+          const { data, error } = await supabase
+            .from("locations")
+            .select("id, name")
+            .eq("type", "warehouse");
+          if (error) throw error;
+
+          const rows = (data ?? []) as Array<{ id?: string; name?: string }>;
+          const items = rows
+            .filter((r) => r.id)
+            .map((r) => ({
+              id: r.id as string,
+              name: r.name || "Unnamed Warehouse",
+            }));
+
+          if (mounted) setWarehouses(items);
+        } catch (err) {
+          console.error("Failed to load warehouses", err);
+        } finally {
+          if (mounted) setLoadingWh(false);
+        }
+      };
+      load();
+      return () => {
+        mounted = false;
+      };
+      // reload when storeId changes
+    }, [storeId]);
+
+    if (loadingWh) {
+      return (
+        <div className="py-4">
+          <Loader2 className="w-4 h-4 animate-spin" />
+        </div>
+      );
+    }
+
+    if (warehouses.length === 0) {
+      return (
+        <div className="text-sm text-muted-foreground italic">
+          No warehouses available for these items.
+        </div>
+      );
+    }
+
+    return (
+      <div className="space-y-2">
+        <Label>Pick up point</Label>
+        <Select
+          value={state.warehouseId || ""}
+          onValueChange={(val) =>
+            updateStoreState(storeId, {
+              warehouseId: val || undefined,
+              warehouseName: warehouses.find((w) => w.id === val)?.name,
+            })
+          }
+        >
+          <SelectTrigger className="w-full">
+            <SelectValue placeholder="Select a pick up point" />
+          </SelectTrigger>
+          <SelectContent>
+            {warehouses.map((w) => (
+              <SelectItem key={w.id} value={w.id}>
+                {w.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+    );
+  }
 
   const updateStoreState = (
     storeId: string,
     updates: Partial<typeof getStoreState>
   ) => {
-    setStoreCheckoutState((prev) => ({
-      ...prev,
-      [storeId]: {
-        ...getStoreState(storeId),
-        ...updates,
-      },
-    }));
+    setStoreCheckoutState((prev) => {
+      const existing = prev[storeId] || {
+        step: 1,
+        fulfillment: "courier",
+        address: "",
+        showPayment: false,
+        paymentMethod: undefined,
+        paymentDialogMode: undefined,
+      };
+      return {
+        ...prev,
+        [storeId]: {
+          ...existing,
+          ...updates,
+        },
+      };
+    });
   };
 
   const handleCheckout = async (storeId: string) => {
@@ -254,6 +369,14 @@ export default function CartPage() {
         const validation = checkoutSchema.safeParse({ address: state.address });
         if (!validation.success) {
           const msg = validation.error.issues[0].message;
+          setError(msg);
+          toast.error(msg);
+          return;
+        }
+      }
+      if (state.fulfillment === "warehouse") {
+        if (!state.warehouseId) {
+          const msg = "Please select a pick up point";
           setError(msg);
           toast.error(msg);
           return;
@@ -288,14 +411,21 @@ export default function CartPage() {
       const finalTotal = storeTotal + deliveryFee;
 
       // Use storeId as pickup_location_id (the store they selected items from)
+      const dbFulfillmentType =
+        state.fulfillment === "warehouse"
+          ? "warehouse_pickup"
+          : state.fulfillment;
+      const pickupLocationId =
+        state.fulfillment === "warehouse" ? state.warehouseId : storeId;
+
       const { data: order, error: orderError } = await supabase
         .from("orders")
         .insert({
           customer_id: user.id,
           total_amount: finalTotal,
           status: "paid",
-          fulfillment_type: state.fulfillment,
-          pickup_location_id: storeId,
+          fulfillment_type: dbFulfillmentType,
+          pickup_location_id: pickupLocationId,
           delivery_address:
             state.fulfillment === "courier" ? state.address : null,
         })
@@ -465,6 +595,36 @@ export default function CartPage() {
                             </div>
                           </Label>
                         </div>
+
+                        <div
+                          className={cn(
+                            "flex items-center space-x-2 border p-4 rounded-lg cursor-pointer transition-all",
+                            state.fulfillment === "warehouse"
+                              ? "border-primary bg-primary/5"
+                              : "hover:bg-muted/50"
+                          )}
+                        >
+                          <RadioGroupItem
+                            value="warehouse"
+                            id={`${storeId}-warehouse`}
+                          />
+                          <Label
+                            htmlFor={`${storeId}-warehouse`}
+                            className="flex-1 cursor-pointer flex items-center gap-3"
+                          >
+                            <div className="bg-background p-2 rounded-full border">
+                              <MapPin className="w-5 h-5 text-primary" />
+                            </div>
+                            <div>
+                              <span className="block font-medium">
+                                Pick up point
+                              </span>
+                              <span className="text-sm text-muted-foreground">
+                                Collect from a pick up point - Free
+                              </span>
+                            </div>
+                          </Label>
+                        </div>
                       </RadioGroup>
                     </div>
 
@@ -509,6 +669,12 @@ export default function CartPage() {
                             disabled={!!state.address}
                           />
                         </div>
+                      </div>
+                    )}
+
+                    {state.fulfillment === "warehouse" && (
+                      <div className="space-y-4 animate-in slide-in-from-top-2">
+                        <WarehouseSelector storeId={storeId} />
                       </div>
                     )}
                   </CardContent>
@@ -585,7 +751,9 @@ export default function CartPage() {
                         <span className="capitalize">
                           {state.fulfillment === "courier"
                             ? "Courier"
-                            : "Store Pickup"}
+                            : state.fulfillment === "pickup"
+                            ? "Store Pickup"
+                            : "Pick up point"}
                         </span>
                       </div>
                       <Separator />
@@ -604,17 +772,57 @@ export default function CartPage() {
                     </div>
 
                     <Card className="bg-primary/5 border-primary">
-                      <CardContent className="p-4 flex items-center gap-3">
-                        <CreditCard className="w-5 h-5 text-primary" />
-                        <div>
-                          <div className="font-medium text-sm">
-                            Credit / Debit Card
+                      <CardContent className="p-4">
+                        <div className="flex items-center gap-3">
+                          <div className="flex-1">
+                            <div className="font-medium text-sm">
+                              Payment Method
+                            </div>
+                            <div className="text-sm">
+                              {state.paymentMethod ? (
+                                (() => {
+                                  const g = getGateway(
+                                    state.paymentMethod as PaymentMethodId
+                                  );
+                                  return g ? g.name : state.paymentMethod;
+                                })()
+                              ) : (
+                                <span className="text-muted-foreground">
+                                  No payment method selected
+                                </span>
+                              )}
+                            </div>
                           </div>
-                          <div className="text-xs text-muted-foreground">
-                            Secure payment processing
+                          <div className="flex gap-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() =>
+                                updateStoreState(storeId, {
+                                  showPayment: true,
+                                  paymentDialogMode: "select",
+                                })
+                              }
+                              className="h-8"
+                            >
+                              Select Payment Method
+                            </Button>
+                            {state.paymentMethod && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() =>
+                                  updateStoreState(storeId, {
+                                    paymentMethod: undefined,
+                                  })
+                                }
+                                className="text-destructive h-8"
+                              >
+                                Remove
+                              </Button>
+                            )}
                           </div>
                         </div>
-                        <CheckCircle2 className="w-5 h-5 text-primary ml-auto" />
                       </CardContent>
                     </Card>
                   </CardContent>
@@ -629,19 +837,70 @@ export default function CartPage() {
                     </Button>
                     <Button
                       className="flex-1"
-                      onClick={() =>
-                        updateStoreState(storeId, { showPayment: true })
-                      }
+                      onClick={async () => {
+                        // If a method is already selected, process payment directly.
+                        if (state.paymentMethod) {
+                          const gateway = getGateway(
+                            state.paymentMethod as PaymentMethodId
+                          );
+                          if (!gateway) {
+                            toast.error("Payment gateway not available");
+                            return;
+                          }
+                          setLoading(true);
+                          try {
+                            const amount =
+                              storeItems.reduce(
+                                (acc, item) => acc + item.price * item.quantity,
+                                0
+                              ) + (state.fulfillment === "courier" ? 100 : 0);
+                            await gateway.init?.();
+                            const res = await gateway.processPayment(
+                              amount,
+                              {}
+                            );
+                            if (res.success) {
+                              toast.success(
+                                res.message || "Payment successful (mock)"
+                              );
+                              await handlePaymentSuccess(storeId);
+                            } else {
+                              toast.error(
+                                res.message || "Payment failed (mock)"
+                              );
+                            }
+                          } catch (err) {
+                            console.error(err);
+                            toast.error("Payment failed. Please try again.");
+                          } finally {
+                            setLoading(false);
+                          }
+                        } else {
+                          // No method selected -> open dialog to select or pay
+                          updateStoreState(storeId, {
+                            showPayment: true,
+                            paymentDialogMode: "pay",
+                          });
+                        }
+                      }}
                       disabled={loading}
                     >
                       {loading ? "Processing..." : "Pay Now"}
                     </Button>
                   </CardFooter>
 
-                  <MockPaymentDialog
+                  <PaymentDialog
                     open={state.showPayment}
-                    onOpenChange={(open) =>
-                      updateStoreState(storeId, { showPayment: open })
+                    mode={state.paymentDialogMode}
+                    initialMethod={state.paymentMethod}
+                    onSelect={(method) =>
+                      updateStoreState(storeId, { paymentMethod: method })
+                    }
+                    onOpenChange={(open: boolean) =>
+                      updateStoreState(storeId, {
+                        showPayment: open,
+                        paymentDialogMode: undefined,
+                      })
                     }
                     amount={
                       storeItems.reduce(
@@ -649,7 +908,9 @@ export default function CartPage() {
                         0
                       ) + (state.fulfillment === "courier" ? 100 : 0)
                     }
-                    onConfirm={() => handlePaymentSuccess(storeId)}
+                    onSuccess={async () => {
+                      await handlePaymentSuccess(storeId);
+                    }}
                   />
                 </Card>
               )}

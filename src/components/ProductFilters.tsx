@@ -22,7 +22,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { Filter, X, Loader2, Search } from "lucide-react";
+import { Filter, Loader2, Search } from "lucide-react";
 
 interface Store {
   id: string;
@@ -34,6 +34,7 @@ interface ProductFiltersProps {
   stores?: Store[];
   maxPrice?: number;
   children: React.ReactNode;
+  showSearch?: boolean;
 }
 
 export function ProductFilters({
@@ -41,6 +42,7 @@ export function ProductFilters({
   stores = [],
   maxPrice = 10000,
   children,
+  showSearch = true,
 }: ProductFiltersProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -106,23 +108,23 @@ export function ProductFilters({
   ].filter(Boolean).length;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 ml-0 md:ml-6">
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
         {/* Sidebar Filters */}
         <div className="hidden md:block space-y-6 max-h-screen sticky top-20 overflow-y-auto pr-4">
           {/* Search Bar */}
-          <form onSubmit={handleSearchSubmit} className="relative w-full">
-            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-            <Input
-              type="search"
-              placeholder="Search products..."
-              className="pl-9 w-full bg-muted/50"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
-          </form>
-
-          <Separator />
+          {showSearch && (
+            <form onSubmit={handleSearchSubmit} className="relative w-full">
+              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+              <Input
+                type="search"
+                placeholder="Search products..."
+                className="pl-9 w-full bg-muted/50"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
+            </form>
+          )}
 
           {/* Sort */}
           <div className="space-y-2">
@@ -228,16 +230,18 @@ export function ProductFilters({
           {/* Mobile Filters */}
           <div className="flex items-center gap-2 md:hidden mb-4">
             {/* Mobile Search */}
-            <form onSubmit={handleSearchSubmit} className="relative flex-1">
-              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-              <Input
-                type="search"
-                placeholder="Search products..."
-                className="pl-9 w-full bg-muted/50"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-              />
-            </form>
+            {showSearch && (
+              <form onSubmit={handleSearchSubmit} className="relative flex-1">
+                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input
+                  type="search"
+                  placeholder="Search products..."
+                  className="pl-9 w-full bg-muted/50"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                />
+              </form>
+            )}
 
             {/* Mobile Filters Button */}
             <Sheet open={isOpen} onOpenChange={setIsOpen}>

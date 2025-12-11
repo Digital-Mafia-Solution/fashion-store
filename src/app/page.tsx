@@ -202,7 +202,7 @@ export default async function Index({ searchParams }: Props) {
   );
 
   return (
-    <ProductFilters categories={categories} stores={stores}>
+    <ProductFilters categories={categories} stores={stores} showSearch={false}>
       <div className="container mx-auto px-4 py-4 md:py-12 mb-20 space-y-12 md:space-y-16">
         {isFiltered ? (
           <div>
