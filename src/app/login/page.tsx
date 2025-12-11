@@ -2,6 +2,7 @@
 
 import { useState, Suspense } from "react";
 import { supabase } from "@/lib/supabase";
+import { zxcvbn } from "@zxcvbn-ts/core";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -17,7 +18,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
-import { Loader2, Chrome, Check, ArrowRight, ArrowLeft } from "lucide-react";
+import { Loader2, Chrome, ArrowRight, ArrowLeft } from "lucide-react";
 import { SmartPhoneInput } from "@/components/ui/phone-input";
 import { z } from "zod";
 import { validatePassword } from "@/lib/password";
@@ -59,6 +60,21 @@ function AuthContent() {
   const [activeTab, setActiveTab] = useState<"login" | "signup">("login");
   const [resetMode, setResetMode] = useState(false);
 
+  // Password UX states
+  const [pwScore, setPwScore] = useState<number | null>(null);
+  const [pwFeedback, setPwFeedback] = useState<{
+    warning?: string;
+    suggestions?: string[];
+  } | null>(null);
+  const [pwBreached, setPwBreached] = useState<boolean | null>(null);
+  const [checkingBreach, setCheckingBreach] = useState(false);
+  const [finalizing, setFinalizing] = useState(false);
+  // Email verification states
+  const [emailChecked, setEmailChecked] = useState(false);
+  const [emailExists, setEmailExists] = useState<boolean | null>(null);
+  const [checkingEmail, setCheckingEmail] = useState(false);
+  // Debug helpers were removed after verification
+
   // --- LOGIN STATE ---
   const [loginEmail, setLoginEmail] = useState("");
   const [loginPassword, setLoginPassword] = useState("");
@@ -92,7 +108,127 @@ function AuthContent() {
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData({ ...formData, [e.target.id]: e.target.value });
+    if (e.target.id === "email") {
+      // reset email verification while user is typing
+      setEmailChecked(false);
+      setEmailExists(null);
+    }
+    // Update zxcvbn live for password fields
+    if (e.target.id === "password" || e.target.id === "loginPassword") {
+      const pw = e.target.value;
+      try {
+        const res = zxcvbn(pw, [
+          formData.email,
+          formData.firstName,
+          formData.lastName,
+        ]);
+        setPwScore(res.score);
+        setPwFeedback({
+          warning: res.feedback.warning ?? undefined,
+          suggestions: res.feedback.suggestions ?? undefined,
+        });
+      } catch {
+        // ignore zxcvbn errors
+        setPwScore(null);
+        setPwFeedback(null);
+      }
+    }
   };
+
+  // Verify email availability on blur
+  async function checkEmailAvailability(email: string) {
+    if (!email) return;
+    // normalize
+    const normalized = email.trim().toLowerCase();
+    setCheckingEmail(true);
+    try {
+      const res = await fetch("/api/check-email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: normalized }),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        // Block progression by marking as not checked
+        setEmailChecked(false);
+        setEmailExists(null);
+        if (json?.error === "no_service_key") {
+          toast.error(
+            "Email verification not configured. Please try again later."
+          );
+        } else {
+          toast.error("Could not verify email. Please try again later.");
+        }
+        return;
+      }
+
+      setEmailChecked(true);
+      setEmailExists(Boolean(json.exists));
+      if (json.exists) {
+        toast.error(
+          "An account with that email already exists. Please sign in or reset your password."
+        );
+      }
+    } catch (err) {
+      console.error("check-email failed", err);
+      setEmailChecked(false);
+      setEmailExists(null);
+      toast.error("Could not verify email. Please try again later.");
+    } finally {
+      setCheckingEmail(false);
+    }
+  }
+
+  // UI helpers
+  const statusClass = (v: boolean | null) =>
+    v === true
+      ? "text-green-600"
+      : v === false
+      ? "text-destructive"
+      : "text-muted-foreground";
+
+  const lengthPass = passwordCriteria.length;
+  const matchPass = passwordCriteria.match;
+  const strengthPass = (pwScore ?? 0) >= 3;
+  const breachPass = pwBreached === false;
+  // Keep references to these states to avoid lint 'assigned but never used' warnings
+  void checkingEmail;
+  void emailChecked;
+  void emailExists;
+
+  // Compute SHA1 hex of a string (uppercase)
+  async function sha1Hex(value: string) {
+    const enc = new TextEncoder();
+    const buffer = await crypto.subtle.digest("SHA-1", enc.encode(value));
+    const arr = Array.from(new Uint8Array(buffer));
+    return arr
+      .map((b) => b.toString(16).padStart(2, "0"))
+      .join("")
+      .toUpperCase();
+  }
+
+  // Call server route to check breach by prefix+suffix
+  async function checkBreach(password: string) {
+    if (!password) return;
+    setCheckingBreach(true);
+    try {
+      const hash = await sha1Hex(password);
+      const prefix = hash.slice(0, 5);
+      const suffix = hash.slice(5);
+      const res = await fetch("/api/check-breach", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prefix, suffix }),
+      });
+      const json = await res.json();
+      setPwBreached(Boolean(json?.breached));
+    } catch (err) {
+      console.error("Breach check failed", err);
+      setPwBreached(false);
+    } finally {
+      setCheckingBreach(false);
+    }
+  }
 
   const handlePhoneChange = (value: string) => {
     setFormData((prev) => ({ ...prev, phone: value }));
@@ -213,6 +349,108 @@ function AuthContent() {
     setLoading(false);
 
     if (isValid) {
+      // When moving from step 1 -> 2 verify email doesn't exist and password isn't breached
+      if (signupStep === 1) {
+        // First, require an email-existence check via server
+        try {
+          setCheckingEmail(true);
+          const normalizedEmail = formData.email.trim().toLowerCase();
+          const emailRes = await fetch("/api/check-email", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ email: normalizedEmail }),
+          });
+
+          const emailJson = await emailRes.json();
+
+          // If service key isn't configured or server can't verify, block progression so user isn't allowed into step 2 without validation
+          if (!emailRes.ok) {
+            setCheckingEmail(false);
+            if (emailJson?.error === "no_service_key") {
+              toast.error(
+                "Email verification unavailable. Please try again later."
+              );
+              return;
+            }
+            toast.error(
+              "Could not verify email existence. Please try again later."
+            );
+            return;
+          }
+
+          // Set UI state so checklist shows result after successful check
+          setEmailChecked(true);
+          setEmailExists(Boolean(emailJson?.exists));
+          setCheckingEmail(false);
+
+          if (emailJson?.exists) {
+            toast.error(
+              "An account with that email already exists. Please sign in or use password reset."
+            );
+            return;
+          }
+        } catch (err) {
+          console.error("check-email request failed", err);
+          setCheckingEmail(false);
+          setEmailChecked(false);
+          setEmailExists(null);
+          toast.error("Could not verify email. Please try again later.");
+          return;
+        }
+
+        // Only if email doesn't exist, check password breach via verify-signup
+        try {
+          setCheckingBreach(true);
+          const hash = await sha1Hex(formData.password);
+          const prefix = hash.slice(0, 5);
+          const suffix = hash.slice(5);
+
+          const normalizedEmail2 = formData.email.trim().toLowerCase();
+          const res = await fetch("/api/verify-signup", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ email: normalizedEmail2, prefix, suffix }),
+          });
+          const json = await res.json();
+
+          if (!res.ok) {
+            setCheckingBreach(false);
+            setPwBreached(null);
+            toast.error(
+              "Could not verify password breach. Please try again later."
+            );
+            return;
+          }
+
+          // Update UI state so checklist reflects server breach check
+          setPwBreached(Boolean(json?.breached));
+          setCheckingBreach(false);
+
+          if (json?.breached) {
+            toast.error(
+              "This password has been seen in a known breach. Choose a different password."
+            );
+            return;
+          }
+        } catch (err) {
+          console.warn("Could not verify breach on server", err);
+          setCheckingBreach(false);
+          setPwBreached(null);
+          toast.error(
+            "Could not verify password breach. Please try again later."
+          );
+          return;
+        }
+      }
+
+      // Small delay so users see the 'Checking' state before we advance
+      try {
+        setFinalizing(true);
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+      } finally {
+        setFinalizing(false);
+      }
+
       setSignupStep((prev) => prev + 1);
     }
   };
@@ -377,12 +615,13 @@ function AuthContent() {
               <CardHeader>
                 <CardTitle>Create an account</CardTitle>
                 <CardDescription>
-                  Step {signupStep} of 3:
-                  {signupStep === 1 && " Security"}
-                  {signupStep === 2 && " Personal Info"}
-                  {signupStep === 3 && " Contact"}
+                  Step {signupStep} of 3:{" "}
+                  {signupStep === 1
+                    ? "Security"
+                    : signupStep === 2
+                    ? "Personal Info"
+                    : "Contact"}
                 </CardDescription>
-                {/* Progress Bar */}
                 <div className="h-1 w-full bg-secondary mt-2 rounded-full overflow-hidden">
                   <div
                     className="h-full bg-primary transition-all duration-300 ease-in-out"
@@ -392,7 +631,6 @@ function AuthContent() {
               </CardHeader>
 
               <CardContent className="space-y-4 min-h-[300px]">
-                {/* STEP 1: CREDENTIALS */}
                 {signupStep === 1 && (
                   <div className="space-y-4 animate-in slide-in-from-right-4 duration-300">
                     <Button
@@ -401,8 +639,7 @@ function AuthContent() {
                       onClick={() => handleSocialLogin("google")}
                       disabled={loading}
                     >
-                      <Chrome className="mr-2 h-4 w-4" />
-                      Sign up with Google
+                      <Chrome className="mr-2 h-4 w-4" /> Sign up with Google
                     </Button>
 
                     <div className="flex items-center gap-4 mb-4">
@@ -419,6 +656,7 @@ function AuthContent() {
                         placeholder="m@example.com"
                         value={formData.email}
                         onChange={handleInputChange}
+                        onBlur={() => checkEmailAvailability(formData.email)}
                       />
                     </div>
 
@@ -430,8 +668,12 @@ function AuthContent() {
                           type="password"
                           value={formData.password}
                           onChange={handleInputChange}
+                          onBlur={(e) =>
+                            checkBreach((e.target as HTMLInputElement).value)
+                          }
                         />
                       </div>
+
                       <div className="space-y-2">
                         <Label htmlFor="confirmPassword">
                           Confirm Password
@@ -444,46 +686,116 @@ function AuthContent() {
                         />
                       </div>
 
-                      {/* Hints */}
-                      <div className="space-y-1.5 pt-1">
-                        <div className="flex items-center gap-2 text-xs">
-                          {passwordCriteria.length ? (
-                            <Check className="w-3 h-3 text-green-500" />
-                          ) : (
-                            <div className="w-3 h-3 rounded-full border border-muted-foreground/30" />
-                          )}
-                          <span
-                            className={
-                              passwordCriteria.length
-                                ? "text-green-600"
-                                : "text-muted-foreground"
-                            }
-                          >
-                            At least 12 characters
-                          </span>
+                      {/* strength meter and feedback */}
+                      <div className="mt-3">
+                        <div className="h-2 w-full bg-muted rounded overflow-hidden">
+                          <div
+                            aria-hidden
+                            className={`h-full transition-all`}
+                            style={{
+                              width: `${(pwScore ?? 0) * 25}%`,
+                              background:
+                                pwScore === null
+                                  ? "transparent"
+                                  : pwScore <= 1
+                                  ? "#ef4444"
+                                  : pwScore === 2
+                                  ? "#f59e0b"
+                                  : pwScore === 3
+                                  ? "#10b981"
+                                  : "#047857",
+                            }}
+                          />
                         </div>
-                        <div className="flex items-center gap-2 text-xs">
-                          {passwordCriteria.match ? (
-                            <Check className="w-3 h-3 text-green-500" />
-                          ) : (
-                            <div className="w-3 h-3 rounded-full border border-muted-foreground/30" />
+
+                        <div className="flex items-center justify-between text-xs mt-1">
+                          <div>
+                            {pwScore === null ? (
+                              <span className="text-muted-foreground">
+                                Type a password
+                              </span>
+                            ) : pwScore <= 1 ? (
+                              <span className="text-red-600">Very weak</span>
+                            ) : pwScore === 2 ? (
+                              <span className="text-amber-600">Weak</span>
+                            ) : pwScore === 3 ? (
+                              <span className="text-green-600">Good</span>
+                            ) : (
+                              <span className="text-green-800">Strong</span>
+                            )}
+                          </div>
+                          <div className="text-muted-foreground">
+                            {pwScore !== null && (
+                              <span className="hidden">Score: {pwScore}/4</span>
+                            )}
+                          </div>
+                        </div>
+
+                        {pwFeedback &&
+                          (pwFeedback.warning ||
+                            (pwFeedback.suggestions &&
+                              pwFeedback.suggestions.length > 0)) && (
+                            <div className="mt-2 text-xs text-muted-foreground">
+                              {pwFeedback.warning && (
+                                <div className="text-sm text-yellow-700">
+                                  {pwFeedback.warning}
+                                </div>
+                              )}
+                              {pwFeedback.suggestions?.map((s, i) => (
+                                <div key={i} className="mt-1">
+                                  • {s}
+                                </div>
+                              ))}
+                            </div>
                           )}
-                          <span
-                            className={
-                              passwordCriteria.match
-                                ? "text-green-600"
-                                : "text-muted-foreground"
-                            }
+
+                        {checkingBreach && (
+                          <div className="mt-2 text-xs text-muted-foreground">
+                            Checking breach...
+                          </div>
+                        )}
+
+                        {pwBreached !== null && (
+                          <div
+                            className={`mt-2 text-xs ${
+                              pwBreached ? "text-red-600" : "text-green-600"
+                            }`}
                           >
-                            Passwords match
-                          </span>
+                            {pwBreached
+                              ? "This password has been seen in a data breach. Choose a different one."
+                              : "Password not found in known breaches."}
+                          </div>
+                        )}
+
+                        {/* Consolidated checklist */}
+                        <div className="mt-3 text-sm space-y-2">
+                          <div className="flex items-center gap-2">
+                            <span className={statusClass(lengthPass)}>
+                              {lengthPass ? "✓" : "○"} At least 12 characters
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className={statusClass(strengthPass)}>
+                              {strengthPass ? "✓" : "○"} Password strength
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className={statusClass(matchPass)}>
+                              {matchPass ? "✓" : "○"} Passwords match
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className={statusClass(breachPass)}>
+                              {breachPass ? "✓" : "○"} Not in known breaches
+                            </span>
+                          </div>
+                          {/* Email availability UI removed (checks still run in background) */}
                         </div>
                       </div>
                     </div>
                   </div>
                 )}
 
-                {/* STEP 2: PERSONAL INFO */}
                 {signupStep === 2 && (
                   <div className="space-y-4 animate-in slide-in-from-right-4 duration-300">
                     <div className="grid grid-cols-2 gap-4">
@@ -514,7 +826,6 @@ function AuthContent() {
                   </div>
                 )}
 
-                {/* STEP 3: CONTACT & ADDRESS */}
                 {signupStep === 3 && (
                   <div className="space-y-4 animate-in slide-in-from-right-4 duration-300">
                     <div className="space-y-2">
@@ -525,7 +836,6 @@ function AuthContent() {
                         placeholder="76 123 4567"
                       />
                     </div>
-
                     <div className="space-y-2">
                       <Label>Billing Address (Optional)</Label>
                       <AddressAutocomplete
@@ -540,6 +850,8 @@ function AuthContent() {
                     </div>
                   </div>
                 )}
+
+                {/* Debug output removed (no longer needed) */}
               </CardContent>
 
               <CardFooter className="flex justify-between">
@@ -552,12 +864,26 @@ function AuthContent() {
                     <ArrowLeft className="mr-2 h-4 w-4" /> Back
                   </Button>
                 ) : (
-                  <div /> /* Spacer */
+                  <div />
                 )}
 
                 {signupStep < 3 ? (
-                  <Button onClick={nextStep} disabled={loading}>
-                    Next <ArrowRight className="ml-2 h-4 w-4" />
+                  <Button
+                    onClick={nextStep}
+                    disabled={
+                      loading || checkingEmail || checkingBreach || finalizing
+                    }
+                  >
+                    {checkingEmail || checkingBreach || finalizing ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Checking
+                      </>
+                    ) : (
+                      <>
+                        Next <ArrowRight className="ml-2 h-4 w-4" />
+                      </>
+                    )}
                   </Button>
                 ) : (
                   <Button onClick={handleFinalSignup} disabled={loading}>
