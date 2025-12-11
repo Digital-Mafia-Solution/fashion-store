@@ -18,7 +18,10 @@ export async function GET(request: NextRequest) {
     await supabase.auth.exchangeCodeForSession(code);
   }
 
-  const redirectTo = new URL(next, requestUrl.origin);
+  // Prefer an explicit site URL (set via env) so redirects go to the
+  // deployed site even if the incoming request origin is localhost.
+  const siteOrigin = process.env.NEXT_PUBLIC_SITE_URL || requestUrl.origin;
+  const redirectTo = new URL(next, siteOrigin);
 
   if (type === "recovery" || next.includes("update-password")) {
     redirectTo.searchParams.set("reset_required", "true");
