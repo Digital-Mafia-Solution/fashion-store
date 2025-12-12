@@ -238,7 +238,11 @@ function AuthContent() {
   const origin =
     process.env.NEXT_PUBLIC_SITE_URL ||
     (typeof window !== "undefined" ? window.location.origin : "");
-  console.log("Origin:", origin);
+  console.log(
+    "Origin:",
+    origin,
+    process.env.NEXT_PUBLIC_SITE_URL ? "env" : "window"
+  );
   console.log("Next:", next);
 
   const handleSocialLogin = async (provider: "google" | "apple") => {
