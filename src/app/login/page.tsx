@@ -234,10 +234,19 @@ function AuthContent() {
     setFormData((prev) => ({ ...prev, phone: value }));
   };
 
+  // Note: origin is resolved inside handlers to avoid unused variable during build
+  const origin =
+    process.env.NEXT_PUBLIC_SITE_URL ||
+    (typeof window !== "undefined" ? window.location.origin : "");
+  console.log("Origin:", origin);
+  console.log("Next:", next);
+
   const handleSocialLogin = async (provider: "google" | "apple") => {
     setLoading(true);
     try {
-      const origin = process.env.NEXT_PUBLIC_SITE_URL || window.location.origin;
+      const origin =
+        process.env.NEXT_PUBLIC_SITE_URL ||
+        (typeof window !== "undefined" ? window.location.origin : "");
       const { error } = await supabase.auth.signInWithOAuth({
         provider,
         options: {
@@ -279,7 +288,9 @@ function AuthContent() {
 
     setLoading(true);
     try {
-      const origin = process.env.NEXT_PUBLIC_SITE_URL || window.location.origin;
+      const origin =
+        process.env.NEXT_PUBLIC_SITE_URL ||
+        (typeof window !== "undefined" ? window.location.origin : "");
       // Redirect to the dedicated update-password page
       const { error } = await supabase.auth.resetPasswordForEmail(resetEmail, {
         redirectTo: `${origin}/auth/callback?next=/update-password`,
