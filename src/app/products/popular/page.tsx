@@ -8,7 +8,8 @@ export const revalidate = 0;
 export default async function PopularProductsPage() {
   const { data: products } = await supabase
     .from("products")
-    .select(`*, inventory ( quantity, locations ( type ) )`)
+    .select(`*, inventory ( quantity, price, locations ( type ) )`)
+    .eq("is_archived", false)
     .order("price", { ascending: false })
     .limit(50);
 
@@ -25,11 +26,17 @@ export default async function PopularProductsPage() {
         What everyone is wearing right now.
       </p>
 
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-8">
-        {products?.map((product) => (
-          <ProductCard key={product.id} product={product} />
-        ))}
-      </div>
+      {products && products.length > 0 ? (
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-8">
+          {products.map((product) => (
+            <ProductCard key={product.id} product={product} />
+          ))}
+        </div>
+      ) : (
+        <div className="text-center py-20 bg-muted/20 rounded-lg">
+          <p className="text-muted-foreground">No popular items available.</p>
+        </div>
+      )}
     </div>
   );
 }

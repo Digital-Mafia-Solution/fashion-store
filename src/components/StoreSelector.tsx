@@ -98,9 +98,6 @@ export function StoreSelector({
                           {store.address}
                         </div>
                       )}
-                      <div className="text-sm text-muted-foreground mt-1">
-                        {store.quantity} units available
-                      </div>
                     </Label>
                   </div>
                 ))}

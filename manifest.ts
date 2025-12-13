@@ -7,8 +7,8 @@ export default function manifest(): MetadataRoute.Manifest {
   "description": "Get local, online.",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#000000",
-  "theme_color": "#000000",
+  "background_color": "#f0f7f6",
+  "theme_color": "#f0f7f6",
   "icons": [
     {
       "src": "/icons/pwa.svg",

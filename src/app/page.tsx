@@ -7,6 +7,7 @@ import { ProductCard } from "@/components/ProductCard";
 import { MobileCarousel } from "@/components/MobileCarousel";
 import { CarouselItem } from "@/components/ui/carousel";
 import { ProductFilters } from "@/components/ProductFilters";
+import { RefreshButton } from "@/components/RefreshButton";
 import { Tables } from "@/lib/database.types";
 
 export const revalidate = 0;
@@ -20,6 +21,7 @@ type ProductWithInventory = Tables<"products"> & {
   inventory:
     | {
         quantity: number | null;
+        price: number;
         locations: {
           id?: string | null;
           type: "store" | "warehouse" | "virtual_courier";
@@ -50,12 +52,16 @@ export default async function Index({ searchParams }: Props) {
   // --- FETCH ALL CATEGORIES AND STORES ---
   const { data: allProductsCategories } = await supabase
     .from("products")
-    .select("category");
+    .select("category, clothing_type")
+    .eq("is_archived", false);
 
   const categorySet = new Set<string>();
   allProductsCategories?.forEach((p) => {
     if (p.category && Array.isArray(p.category)) {
       p.category.forEach((c) => categorySet.add(c));
+    }
+    if (p.clothing_type) {
+      categorySet.add(p.clothing_type);
     }
   });
   const categories = Array.from(categorySet).sort();
@@ -73,17 +79,22 @@ export default async function Index({ searchParams }: Props) {
   }));
 
   // --- FETCH FILTERED PRODUCTS ---
-  let query = supabase.from("products").select(`
+  let query = supabase
+    .from("products")
+    .select(
+      `
     *,
-    inventory ( quantity, locations ( id, type ) )
-  `);
+    inventory ( quantity, price, locations ( id, type ) )
+  `
+    )
+    .eq("is_archived", false);
 
   if (q) {
     query = query.or(`name.ilike.%${q}%,category.cs.{${q}}`);
   }
 
   if (category) {
-    query = query.contains("category", [category]);
+    query = query.or(`category.cs.{${category}},clothing_type.eq.${category}`);
   }
 
   if (params.min || params.max) {
@@ -132,7 +143,8 @@ export default async function Index({ searchParams }: Props) {
     // Fetch Latest
     const latestRes = await supabase
       .from("products")
-      .select(`*, inventory ( quantity, locations ( type ) )`)
+      .select(`*, inventory ( quantity, price, locations ( type ) )`)
+      .eq("is_archived", false)
       .order("created_at", { ascending: false })
       .limit(6);
     latestProducts = latestRes.data as ProductWithInventory[] | null;
@@ -140,7 +152,8 @@ export default async function Index({ searchParams }: Props) {
     // Fetch Popular
     const popularRes = await supabase
       .from("products")
-      .select(`*, inventory ( quantity, locations ( type ) )`)
+      .select(`*, inventory ( quantity, price, locations ( type ) )`)
+      .eq("is_archived", false)
       .order("price", { ascending: false })
       .limit(6);
     popularProducts = popularRes.data as ProductWithInventory[] | null;
@@ -148,7 +161,8 @@ export default async function Index({ searchParams }: Props) {
     // Fetch Category Images
     const allProdsRes = await supabase
       .from("products")
-      .select("category, image_url")
+      .select("category, clothing_type, image_url")
+      .eq("is_archived", false)
       .limit(12);
     const categoryMap = new Map<string, string>();
     allProdsRes.data?.forEach((p) => {
@@ -158,6 +172,11 @@ export default async function Index({ searchParams }: Props) {
             categoryMap.set(c, p.image_url || "");
           }
         });
+      }
+      if (p.clothing_type) {
+        if (!categoryMap.has(p.clothing_type)) {
+          categoryMap.set(p.clothing_type, p.image_url || "");
+        }
       }
     });
     homeCategories = Array.from(categoryMap.entries()).map(([name, image]) => ({
@@ -171,52 +190,77 @@ export default async function Index({ searchParams }: Props) {
     subtitle: string,
     link: string,
     content: React.ReactNode,
-    mobileContent: React.ReactNode
-  ) => (
-    <section>
-      <div className="flex justify-between items-end mb-4 md:mb-6">
-        <div>
-          <h2 className="text-2xl md:text-3xl font-bold tracking-tight">
-            {title}
-          </h2>
-          <p className="text-muted-foreground text-sm mt-1">{subtitle}</p>
-        </div>
-        <Button variant="ghost" className="hidden lg:flex" asChild>
-          <Link href={link}>
-            View All <ArrowRight className="ml-2 h-4 w-4" />
-          </Link>
-        </Button>
-      </div>
+    mobileContent: React.ReactNode,
+    isEmpty: boolean = false,
+    emptyMessage: string = "No items available"
+  ) => {
+    if (isEmpty) {
+      return (
+        <section>
+          <div className="flex justify-between items-end mb-4 md:mb-6">
+            <div>
+              <h2 className="text-2xl md:text-3xl font-bold tracking-tight">
+                {title}
+              </h2>
+              <p className="text-muted-foreground text-sm mt-1">{subtitle}</p>
+            </div>
+          </div>
+          <div className="text-center py-12 bg-muted/20 rounded-lg">
+            <p className="text-muted-foreground">{emptyMessage}</p>
+          </div>
+        </section>
+      );
+    }
 
-      <div className="lg:hidden">
-        <MobileCarousel>{mobileContent}</MobileCarousel>
-        <div className="mt-4">
-          <Button variant="outline" className="w-full" asChild>
-            <Link href={link}>View All {title}</Link>
+    return (
+      <section>
+        <div className="flex justify-between items-end mb-4 md:mb-6">
+          <div>
+            <h2 className="text-2xl md:text-3xl font-bold tracking-tight">
+              {title}
+            </h2>
+            <p className="text-muted-foreground text-sm mt-1">{subtitle}</p>
+          </div>
+          <Button variant="ghost" className="hidden lg:flex" asChild>
+            <Link href={link}>
+              View All <ArrowRight className="ml-2 h-4 w-4" />
+            </Link>
           </Button>
         </div>
-      </div>
 
-      <div className="hidden lg:grid lg:grid-cols-6 gap-8">{content}</div>
-    </section>
-  );
+        <div className="lg:hidden">
+          <MobileCarousel>{mobileContent}</MobileCarousel>
+          <div className="mt-4">
+            <Button variant="outline" className="w-full" asChild>
+              <Link href={link}>View All {title}</Link>
+            </Button>
+          </div>
+        </div>
+
+        <div className="hidden lg:grid lg:grid-cols-6 gap-8">{content}</div>
+      </section>
+    );
+  };
 
   return (
     <ProductFilters categories={categories} stores={stores} showSearch={false}>
       <div className="container mx-auto px-4 py-4 md:py-12 mb-20 space-y-12 md:space-y-16">
         {isFiltered ? (
           <div>
-            <div className="mb-8">
-              <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight">
-                {q
-                  ? `Results for "${q}"`
-                  : category
-                  ? `${category} Collection`
-                  : "All Products"}
-              </h1>
-              <p className="text-muted-foreground mt-2 text-sm md:text-base">
-                Found {filteredProducts?.length || 0} items.
-              </p>
+            <div className="mb-8 flex justify-between items-start gap-4">
+              <div className="flex-1">
+                <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight">
+                  {q
+                    ? `Results for "${q}"`
+                    : category
+                    ? `${category} Collection`
+                    : "All Products"}
+                </h1>
+                <p className="text-muted-foreground mt-2 text-sm md:text-base">
+                  Found {filteredProducts?.length || 0} items.
+                </p>
+              </div>
+              <RefreshButton />
             </div>
 
             {filteredProducts && filteredProducts.length > 0 ? (
@@ -241,7 +285,7 @@ export default async function Index({ searchParams }: Props) {
             {renderSection(
               "Latest Drops",
               "Fresh local fashion, just landed.",
-              "/?sort=recency",
+              "/products/latest",
               latestProducts?.map((p) => (
                 <ProductCard key={p.id} product={p} />
               )),
@@ -252,13 +296,15 @@ export default async function Index({ searchParams }: Props) {
                 >
                   <ProductCard product={p} />
                 </CarouselItem>
-              ))
+              )),
+              !latestProducts || latestProducts.length === 0,
+              "No latest items available"
             )}
 
             {renderSection(
               "Popular",
               "Top rated styles this week.",
-              "/?sort=price_desc",
+              "/products/popular",
               popularProducts?.map((p) => (
                 <ProductCard key={p.id} product={p} />
               )),
@@ -269,26 +315,35 @@ export default async function Index({ searchParams }: Props) {
                 >
                   <ProductCard product={p} />
                 </CarouselItem>
-              ))
+              )),
+              !popularProducts || popularProducts.length === 0,
+              "No popular items available"
             )}
-          </>
-        )}
 
-        {renderSection(
-          "Categories",
-          "Browse by collection.",
-          "/categories",
-          homeCategories.map((cat) => (
-            <CategoryCard key={cat.name} name={cat.name} image={cat.image} />
-          )),
-          homeCategories.map((cat) => (
-            <CarouselItem
-              key={cat.name}
-              className="basis-1/2 md:basis-1/3 pl-4"
-            >
-              <CategoryCard name={cat.name} image={cat.image} />
-            </CarouselItem>
-          ))
+            {!isFiltered &&
+              renderSection(
+                "Categories",
+                "Browse by collection.",
+                "/categories",
+                homeCategories.map((cat) => (
+                  <CategoryCard
+                    key={cat.name}
+                    name={cat.name}
+                    image={cat.image}
+                  />
+                )),
+                homeCategories.map((cat) => (
+                  <CarouselItem
+                    key={cat.name}
+                    className="basis-1/2 md:basis-1/3 pl-4"
+                  >
+                    <CategoryCard name={cat.name} image={cat.image} />
+                  </CarouselItem>
+                )),
+                homeCategories.length === 0,
+                "No categories available"
+              )}
+          </>
         )}
       </div>
     </ProductFilters>
@@ -299,7 +354,7 @@ function CategoryCard({ name, image }: { name: string; image: string }) {
   return (
     <Link
       href={`/?category=${name}`}
-      className="group relative aspect-square overflow-hidden rounded-lg bg-gray-100 block h-full w-full"
+      className="group relative aspect-4/5 overflow-hidden rounded-lg bg-gray-100 block h-full w-full"
     >
       {image ? (
         <Image

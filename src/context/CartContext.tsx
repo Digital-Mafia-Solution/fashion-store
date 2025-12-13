@@ -118,7 +118,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
           toast.error("Max stock reached for this item");
           return prev;
         }
-        toast.success("Updated quantity in cart");
+        toast.success(`Updated quantity in cart - R ${price.toFixed(2)}`);
         return prev.map((item) =>
           item.id === product.id &&
           item.storeId === storeId &&
@@ -128,7 +128,8 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
         );
       }
 
-      toast.success("Added to cart");
+      toast.success(`Added to cart - R ${price.toFixed(2)}`);
+
       return [
         ...prev,
         {

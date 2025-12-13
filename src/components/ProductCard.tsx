@@ -7,6 +7,7 @@ type ProductWithInventory = Tables<"products"> & {
   inventory:
     | {
         quantity: number | null;
+        price: number;
         locations: {
           type: "store" | "warehouse" | "virtual_courier";
         } | null;
@@ -26,11 +27,11 @@ export function ProductCard({ product }: ProductCardProps) {
     ) ?? 0;
   const isSoldOut = stockLevel === 0;
 
-  // FIX: Handle category array - show first item or "Unisex"
-  const primaryCategory =
-    product.category && product.category.length > 0
-      ? product.category[0]
-      : "Unisex";
+  // Calculate minimum price from inventory
+  const displayPrice =
+    product.inventory && product.inventory.length > 0
+      ? Math.min(...product.inventory.map((inv) => inv.price))
+      : 0;
 
   return (
     <div className="group relative flex flex-col gap-2 h-full">
@@ -38,7 +39,7 @@ export function ProductCard({ product }: ProductCardProps) {
         <span className="sr-only">View {product.name}</span>
       </Link>
 
-      <div className="aspect-square relative overflow-hidden rounded-lg bg-gray-100 shadow-sm transition-all duration-300 group-hover:shadow-md">
+      <div className="aspect-4/5 relative overflow-hidden rounded-lg bg-gray-100 shadow-sm transition-all duration-300 group-hover:shadow-md">
         {product.image_url ? (
           <Image
             src={product.image_url}
@@ -64,11 +65,8 @@ export function ProductCard({ product }: ProductCardProps) {
         <h3 className="font-semibold text-sm md:text-base leading-tight truncate group-hover:text-primary transition-colors">
           {product.name}
         </h3>
-        <p className="text-xs text-muted-foreground truncate">
-          {primaryCategory}
-        </p>
         <div className="font-bold text-sm md:text-base mt-1 whitespace-nowrap">
-          R {product.price?.toFixed(2)}
+          R {displayPrice.toFixed(2)}
         </div>
       </div>
 

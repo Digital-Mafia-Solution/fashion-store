@@ -16,7 +16,13 @@ import {
 } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { toast } from "sonner";
-import { Loader2, Upload, User as UserIcon, LogOut } from "lucide-react";
+import {
+  Loader2,
+  Upload,
+  User as UserIcon,
+  LogOut,
+  Trash2,
+} from "lucide-react";
 import { User } from "@supabase/supabase-js";
 
 interface ProfileData {
@@ -176,6 +182,32 @@ export default function ProfilePage() {
     }
   };
 
+  const handleRemoveAvatar = async () => {
+    try {
+      setSaving(true);
+      if (!user) throw new Error("No user logged in");
+
+      // Update profile to remove avatar_url
+      const { error } = await supabase.from("profiles").upsert({
+        id: user.id,
+        avatar_url: null,
+        email: user.email,
+      });
+
+      if (error) throw error;
+      setProfile((prev) => ({ ...prev, avatar_url: null }));
+      toast.success("Profile picture removed!");
+    } catch (error: unknown) {
+      const msg =
+        error instanceof Error
+          ? error.message
+          : "Error removing profile picture";
+      toast.error(msg);
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const handleLogout = async () => {
     await supabase.auth.signOut();
     toast.success("Logged out successfully");
@@ -211,7 +243,7 @@ export default function ProfilePage() {
               disabled={saving}
             />
             <Avatar className="w-24 h-24 border-2 border-border group-hover:border-primary transition-colors">
-              <AvatarImage src={profile.avatar_url || ""} />
+              {profile.avatar_url && <AvatarImage src={profile.avatar_url} />}
               <AvatarFallback className="text-2xl bg-muted text-muted-foreground">
                 <UserIcon className="w-10 h-10" />
               </AvatarFallback>
@@ -220,11 +252,23 @@ export default function ProfilePage() {
               <Upload className="w-6 h-6 text-white" />
             </div>
           </div>
-          <div>
+          <div className="flex-1">
             <p className="font-medium">Upload a new photo</p>
             <p className="text-sm text-muted-foreground">
               JPG, GIF or PNG. Max 2MB.
             </p>
+            {profile.avatar_url && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="mt-2 text-destructive hover:text-destructive hover:bg-destructive/10"
+                onClick={handleRemoveAvatar}
+                disabled={saving}
+              >
+                <Trash2 className="w-4 h-4 mr-2" />
+                Remove picture
+              </Button>
+            )}
           </div>
         </CardContent>
       </Card>

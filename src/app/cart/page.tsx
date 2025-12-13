@@ -42,6 +42,8 @@ import { useRouter } from "next/navigation";
 import PaymentDialog from "@/components/PaymentDialog";
 import AddressAutocomplete from "@/components/AddressAutocomplete";
 import { SavedAddresses } from "@/components/SavedAddresses";
+import DeliveryProviderSelector from "@/components/DeliveryProviderSelector";
+import type { TablesUpdate } from "@/lib/database.types";
 import { z } from "zod";
 import { cn } from "@/lib/utils";
 
@@ -175,6 +177,7 @@ export default function CartPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [userId, setUserId] = useState<string>("");
+  const [storeWeights, setStoreWeights] = useState<Record<string, number>>({});
 
   // Per-store checkout state
   const [storeCheckoutState, setStoreCheckoutState] = useState<
@@ -189,6 +192,7 @@ export default function CartPage() {
         paymentDialogMode?: "select" | "pay";
         warehouseId?: string | null;
         warehouseName?: string | null;
+        selectedProvider?: { id: string; name: string; fee: number } | null;
       }
     >
   >({});
@@ -218,6 +222,7 @@ export default function CartPage() {
         paymentMethod: undefined,
         paymentDialogMode: undefined,
         warehouseId: undefined,
+        selectedProvider: undefined,
         warehouseName: undefined,
       };
     });
@@ -335,6 +340,7 @@ export default function CartPage() {
         showPayment: false,
         paymentMethod: undefined,
         paymentDialogMode: undefined,
+        selectedProvider: undefined,
       };
       return {
         ...prev,
@@ -345,6 +351,63 @@ export default function CartPage() {
       };
     });
   };
+
+  // Compute total weight (grams) for a store's items by querying product weights
+  const computeStoreWeight = async (items: CartItem[]) => {
+    if (!items || items.length === 0) return 0;
+    try {
+      const ids = items.map((i) => i.id);
+      const { data, error } = await supabase
+        .from("products")
+        .select("id,weight_grams")
+        .in("id", ids as string[]);
+      if (error) {
+        console.warn("Failed to fetch product weights", error);
+        return 0;
+      }
+      const weights = (data ?? []) as Array<{
+        id?: string;
+        weight_grams?: number;
+      }>;
+      const map = new Map<string, number>();
+      weights.forEach((r) => {
+        if (r.id) map.set(r.id, r.weight_grams ?? 0);
+      });
+      let total = 0;
+      for (const it of items) {
+        const w = map.get(it.id) ?? 0;
+        total += w * it.quantity;
+      }
+      return total;
+    } catch (err) {
+      console.error("computeStoreWeight error", err);
+      return 0;
+    }
+  };
+
+  // Keep per-store computed weights up to date
+  useEffect(() => {
+    let mounted = true;
+    const loadAll = async () => {
+      const ids = Object.keys(cartByStore || {});
+      const next: Record<string, number> = {};
+      await Promise.all(
+        ids.map(async (s) => {
+          try {
+            const w = await computeStoreWeight(cartByStore[s] || []);
+            next[s] = w ?? 0;
+          } catch {
+            next[s] = 0;
+          }
+        })
+      );
+      if (mounted) setStoreWeights((prev) => ({ ...prev, ...next }));
+    };
+    loadAll();
+    return () => {
+      mounted = false;
+    };
+  }, [cartByStore]);
 
   const handleCheckout = async (storeId: string) => {
     const state = getStoreState(storeId);
@@ -403,12 +466,12 @@ export default function CartPage() {
       } = await supabase.auth.getUser();
       if (!user) throw new Error("User not found");
 
-      const deliveryFee = state.fulfillment === "courier" ? 100 : 0;
+      // Courier fees are not charged - we don't handle delivery ourselves
       const storeTotal = storeItems.reduce(
         (acc, item) => acc + item.price * item.quantity,
         0
       );
-      const finalTotal = storeTotal + deliveryFee;
+      const finalTotal = storeTotal;
 
       // Use storeId as pickup_location_id (the store they selected items from)
       const dbFulfillmentType =
@@ -443,6 +506,7 @@ export default function CartPage() {
             product_id: item.id,
             quantity: item.quantity,
             price_at_purchase: item.price,
+            size_name: item.size,
           });
 
         if (itemsError) throw itemsError;
@@ -455,6 +519,47 @@ export default function CartPage() {
         });
 
         if (stockError) throw stockError;
+      }
+
+      // If courier flow and provider selected, assign shipment via API
+      if (state.fulfillment === "courier" && state.selectedProvider) {
+        try {
+          // compute weight for these items
+          const weight = await computeStoreWeight(storeItems);
+          const assignRes = await fetch("/api/delivery/assign", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              provider_id: state.selectedProvider.id,
+              address: state.address,
+              weight_grams: weight,
+              order_id: order.id,
+              items: storeItems.map((i) => ({ id: i.id, qty: i.quantity })),
+            }),
+          });
+
+          const assignJson = await assignRes.json();
+          if (assignRes.ok && assignJson?.assignment) {
+            // Assignment succeeded — update order status to 'transit'
+            const orderUpdate: TablesUpdate<"orders"> = { status: "transit" };
+            await supabase
+              .from("orders")
+              .update(orderUpdate)
+              .eq("id", order.id);
+          } else {
+            // Assignment failed — keep order as 'paid' and log
+            const orderUpdate: TablesUpdate<"orders"> = { status: "paid" };
+            await supabase
+              .from("orders")
+              .update(orderUpdate)
+              .eq("id", order.id);
+            console.warn("Delivery assignment failed", assignJson);
+          }
+        } catch (err) {
+          console.error("Delivery assign error", err);
+          const orderUpdate: TablesUpdate<"orders"> = { status: "paid" };
+          await supabase.from("orders").update(orderUpdate).eq("id", order.id);
+        }
       }
 
       clearStoreCart(storeId);
@@ -560,7 +665,7 @@ export default function CartPage() {
                                 Door-to-Door Courier
                               </span>
                               <span className="text-sm text-muted-foreground">
-                                Standard delivery (2-5 days) - R 100
+                                Standard delivery (2-5 days)
                               </span>
                             </div>
                           </Label>
@@ -668,6 +773,20 @@ export default function CartPage() {
                             error={error}
                             disabled={!!state.address}
                           />
+                          <div className="pt-3">
+                            <DeliveryProviderSelector
+                              address={state.address}
+                              weightGrams={storeWeights[storeId] ?? 0}
+                              selectedProviderId={state.selectedProvider?.id}
+                              onSelect={(p) =>
+                                updateStoreState(storeId, {
+                                  selectedProvider: p
+                                    ? { id: p.id, name: p.name, fee: p.fee }
+                                    : undefined,
+                                })
+                              }
+                            />
+                          </div>
                         </div>
                       </div>
                     )}
@@ -739,14 +858,6 @@ export default function CartPage() {
                         </span>
                       </div>
                       <div className="flex justify-between text-sm">
-                        <span>Delivery</span>
-                        <span>
-                          {state.fulfillment === "courier"
-                            ? "R 100.00"
-                            : "Free"}
-                        </span>
-                      </div>
-                      <div className="flex justify-between text-sm">
                         <span>Delivery Method</span>
                         <span className="capitalize">
                           {state.fulfillment === "courier"
@@ -761,12 +872,12 @@ export default function CartPage() {
                         <span>Total</span>
                         <span>
                           R{" "}
-                          {(
-                            storeItems.reduce(
+                          {storeItems
+                            .reduce(
                               (acc, item) => acc + item.price * item.quantity,
                               0
-                            ) + (state.fulfillment === "courier" ? 100 : 0)
-                          ).toFixed(2)}
+                            )
+                            .toFixed(2)}
                         </span>
                       </div>
                     </div>
@@ -851,11 +962,10 @@ export default function CartPage() {
                           }
                           setLoading(true);
                           try {
-                            const amount =
-                              storeItems.reduce(
-                                (acc, item) => acc + item.price * item.quantity,
-                                0
-                              ) + (state.fulfillment === "courier" ? 100 : 0);
+                            const amount = storeItems.reduce(
+                              (acc, item) => acc + item.price * item.quantity,
+                              0
+                            );
                             await gateway.init?.();
                             const res = await gateway.processPayment(
                               amount,
@@ -904,12 +1014,10 @@ export default function CartPage() {
                         paymentDialogMode: undefined,
                       })
                     }
-                    amount={
-                      storeItems.reduce(
-                        (acc, item) => acc + item.price * item.quantity,
-                        0
-                      ) + (state.fulfillment === "courier" ? 100 : 0)
-                    }
+                    amount={storeItems.reduce(
+                      (acc, item) => acc + item.price * item.quantity,
+                      0
+                    )}
                     onSuccess={async () => {
                       await handlePaymentSuccess(storeId);
                     }}
