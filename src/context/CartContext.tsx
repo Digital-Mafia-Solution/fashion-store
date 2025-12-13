@@ -22,6 +22,7 @@ interface ProductInput {
   image_url: string | null;
   inventory: {
     quantity: number | null;
+    size_name?: string;
     locations: {
       id: string;
       name: string;
@@ -93,10 +94,17 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     size?: string,
     storePrice?: number | null
   ) => {
+    // Find inventory for the selected store AND size
     const storeInventory = product.inventory?.find(
-      (inv) => inv.locations?.id === storeId
+      (inv) => inv.locations?.id === storeId && inv.size_name === size
     );
-    const maxStock = storeInventory?.quantity ?? 0;
+
+    if (!storeInventory) {
+      toast.error("This item is not available at this store");
+      return;
+    }
+
+    const maxStock = storeInventory.quantity ?? 0;
 
     if (maxStock <= 0) {
       toast.error("This item is not available at this store");
